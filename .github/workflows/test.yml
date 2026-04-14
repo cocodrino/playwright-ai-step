@@ -1,0 +1,42 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Bun test + typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Bun
+        run: curl -fsSL https://bun.sh/install | bash
+
+      - name: Setup PATH
+        run: echo "$HOME/.bun/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: TypeScript check
+        run: bun run typecheck
+
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run tests
+        run: bun test
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL || 'https://api.minimax.io/v1' }}
+          LLM_MODEL: ${{ vars.LLM_MODEL || 'MiniMax-M2.7' }}
