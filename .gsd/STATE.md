@@ -35,12 +35,12 @@ Status: executing
 - Improved prompts with few-shot examples
 - Pushed to GitHub
 
-## Phase 4 Status: IN PROGRESS
-- Task 1: Vision + DOM fusion (screenshot in prompt)
-- Task 2: Multi-page navigation with AI-guided flows
-- Task 3: Recording mode (capture user actions → generate ai() code)
-- Task 4: Page object patterns + multi-step flows
-- Task 5: Phase 4 verification tests
+## Phase 5 Status: IN PROGRESS
+- Task 1: Test generation from natural language spec
+- Task 2: Parallel ai() for batch prompts
+- Task 3: Sitemap-based test generation
+- Task 4: Self-healing CLI tool
+- Task 5: Phase 5 final verification + GitHub push
 
 ## Phase 3 Issue from Phase 2
 - "query page title text" fails because LLM picks h1 but selector resolver doesn't find it via role+text fallback. Fix: retry with element text extracted and sent back to LLM.

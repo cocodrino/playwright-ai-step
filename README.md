@@ -272,10 +272,10 @@ playwright-ai-step/
 | Phase | Status | Description |
 |---|---|---|
 | Phase 1: Core Engine | ✅ Complete | ai(), DOM serializer, selector resolver, fixture |
-| Phase 2: Integration Tests | 🔄 In Progress | Real LLM calls, multi-provider, error handling |
-| Phase 3: Selector Intelligence | 📋 Planned | Self-healing selectors, retry with context |
-| Phase 4: Vision + Multi-page | 📋 Planned | Screenshot + DOM fusion, page navigation |
-| Phase 5: Advanced Features | 📋 Planned | Recording, test generation from spec, parallel ai() |
+| Phase 2: Integration Tests | ✅ Complete | Real LLM calls, multi-provider, error handling |
+| Phase 3: Selector Intelligence | ✅ Complete | Retry chain, improved prompts, vision module |
+| Phase 4: Vision + Multi-page | ✅ Complete | Visual context, aiNavigate(), recording, page objects |
+| Phase 5: Advanced Features | ✅ Complete | Test generation, parallel ai(), sitemap, self-healing CLI |
 
 ## License
 
