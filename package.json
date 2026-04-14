@@ -4,10 +4,12 @@
   "type": "module",
   "description": "AI-powered Playwright testing",
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run --dir tests --ignore \"**/integration.test.ts\"",
     "test:watch": "vitest",
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:unit": "vitest run tests/unit.test.ts tests/error-handling.test.ts",
+    "test:integration": "OLLAMA_API_KEY=YOUR_API_KEY_HERE LLM_PROVIDER=ollama OLLAMA_MODEL=gemma4:31b bunx playwright test tests/integration.test.ts"
   },
   "dependencies": {
     "openai": "^4.77.0",
@@ -34,5 +36,7 @@
       "types": "./dist/fixtures.d.ts"
     }
   },
-  "files": ["dist"]
+  "files": [
+    "dist"
+  ]
 }

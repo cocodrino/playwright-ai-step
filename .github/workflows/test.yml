@@ -37,6 +37,8 @@ jobs:
       - name: Run tests
         run: bun test
         env:
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-          LLM_BASE_URL: ${{ vars.LLM_BASE_URL || 'https://api.minimax.io/v1' }}
-          LLM_MODEL: ${{ vars.LLM_MODEL || 'MiniMax-M2.7' }}
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'ollama' }}
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          OLLAMA_MODEL: ${{ vars.OLLAMA_MODEL || 'gemma4:31b' }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          MINIMAX_MODEL: ${{ vars.MINIMAX_MODEL || 'MiniMax-M2.7' }}

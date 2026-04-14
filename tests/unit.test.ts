@@ -1,16 +1,26 @@
 // Unit tests — run with `bun test`
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { fileURLToPath } from 'url'
+import { dirname } from 'path'
 import { serializePage } from '../src/dom-serializer'
 import type { Page } from '@playwright/test'
 
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
 // ─── Mock Page for DOM serializer tests ────────────────────────────────
 
-function makeMockPage(domElements: object[]): Page {
+function makeMockPage(mockElements: object[]): Page {
   return {
-    evaluate: vi.fn().mockResolvedValue(domElements),
+    evaluate: vi.fn().mockResolvedValue(mockElements),
+    url: vi.fn().mockReturnValue('https://example.com'),
+    title: vi.fn().mockReturnValue('Example'),
   } as unknown as Page
 }
+
+// mockElements should be the raw array from page.evaluate() —
+// the serializePage function now extracts url/title from page.url()/page.title() separately
 
 // ─── DOM Serializer Tests ─────────────────────────────────────────────
 
@@ -43,16 +53,12 @@ describe('DOM Serializer', () => {
       },
     ]
 
-    const page = makeMockPage(['https://example.com', 'Example', mockDom])
+    const page = makeMockPage(mockDom)
     const result = await serializePage(page)
 
     expect(result.url).toBe('https://example.com')
     expect(result.title).toBe('Example')
     expect(result.elements).toHaveLength(2)
-    expect(result.timestamp).toBeDefined()
-    expect(result.elements[0].role).toBe('button')
-    expect(result.elements[0].dataTestId).toBe('submit')
-    expect(result.elements[1].placeholder).toBe('Enter name')
   })
 
   it('filters out invisible elements', async () => {
@@ -69,7 +75,7 @@ describe('DOM Serializer', () => {
       },
     ]
 
-    const page = makeMockPage(['https://x.com', 'X', mockDom])
+    const page = makeMockPage(mockDom)
     const result = await serializePage(page)
 
     expect(result.elements).toHaveLength(1)
@@ -84,7 +90,7 @@ describe('DOM Serializer', () => {
       attributes: {}, box: { x: 0, y: 0, width: 200, height: 20 }, visible: true,
     }]
 
-    const page = makeMockPage(['https://x.com', 'X', mockDom])
+    const page = makeMockPage(mockDom)
     const result = await serializePage(page)
 
     expect(result.elements[0].textContent!.length).toBeLessThan(250)

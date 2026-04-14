@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Test Form — playwright-ai-step</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }
+    h1 { color: #333; }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-weight: 600; margin-bottom: 4px; }
+    input, select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    button { background: #0066cc; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #0052a3; }
+    .success { color: green; margin-top: 12px; display: none; }
+    .info { background: #f0f0f0; padding: 12px; border-radius: 4px; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+
+  <div class="info">
+    <p>Welcome to the <strong>playwright-ai-step</strong> test page. Use natural language to interact with this form.</p>
+  </div>
+
+  <h1 data-testid="page-title">User Registration</h1>
+
+  <p data-testid="page-description">Please fill in the form below to create your account.</p>
+
+  <form id="registration-form" data-testid="registration-form">
+    <div class="form-group">
+      <label for="name" data-testid="name-label">Full Name</label>
+      <input
+        type="text"
+        id="name"
+        data-testid="name-input"
+        placeholder="Enter your full name"
+        autocomplete="name"
+      />
+    </div>
+
+    <div class="form-group">
+      <label for="email" data-testid="email-label">Email Address</label>
+      <input
+        type="email"
+        id="email"
+        data-testid="email-input"
+        placeholder="you@example.com"
+        autocomplete="email"
+      />
+    </div>
+
+    <div class="form-group">
+      <label for="role" data-testid="role-label">Account Type</label>
+      <select id="role" data-testid="role-select">
+        <option value="">Select a role...</option>
+        <option value="developer">Developer</option>
+        <option value="designer">Designer</option>
+        <option value="manager">Manager</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>
+        <input type="checkbox" id="terms" data-testid="terms-checkbox" />
+        <span data-testid="terms-label">I agree to the Terms of Service</span>
+      </label>
+    </div>
+
+    <button type="submit" id="submit-btn" data-testid="submit-button">Create Account</button>
+  </form>
+
+  <p class="success" id="success-msg" data-testid="success-message">
+    ✅ Account created successfully! Welcome aboard.
+  </p>
+
+  <p><a href="https://example.com" id="learn-more" data-testid="learn-more-link">Learn more about our services →</a></p>
+
+  <script>
+    document.getElementById('registration-form').addEventListener('submit', function (e) {
+      e.preventDefault()
+      document.getElementById('success-msg').style.display = 'block'
+    })
+  </script>
+
+</body>
+</html>
