@@ -53,7 +53,12 @@ Instruction: "query the submit button text"
 Instruction: "query the checkbox is checked"
 → {"action":"query","selector":"[data-testid='terms-checkbox']","query":{"extraction":"attribute","attribute":"checked"},"reasoning":"Getting checked attribute from checkbox","confidence":0.85}`
 
-function buildUserMessage(instruction: string, snapshot: DOMSnapshot, type: InstructionType): string {
+function buildUserMessage(
+  instruction: string,
+  snapshot: DOMSnapshot,
+  type: InstructionType,
+  visionContext?: import('./vision').VisionPromptParts,
+): string {
   const elementList = snapshot.elements
     .filter(el => el.isVisible && (el.textContent || el.placeholder || el.role))
     .slice(0, 80)
@@ -70,11 +75,15 @@ function buildUserMessage(instruction: string, snapshot: DOMSnapshot, type: Inst
     })
     .join('\n')
 
+  const vision = visionContext
+    ? `\n\n${visionContext.visualContext}\n${visionContext.screenshotAvailable ? '[Screenshot captured — available for vision]' : ''}`
+    : ''
+
   return `URL: ${snapshot.url}
 Title: ${snapshot.title}
 
 [VISIBLE ELEMENTS] (max 80 shown):
-${elementList || '(no visible elements)'}
+${elementList || '(no visible elements)'}${vision}
 
 [INSTRUCTION] (type: ${type})
 ${instruction}
@@ -128,6 +137,7 @@ export async function callLLM(
   snapshot: DOMSnapshot,
   type: InstructionType,
   llmConfig: LLMConfig,
+  visionContext?: import('./vision').VisionPromptParts,
 ): Promise<LLMCommand> {
   const client = new OpenAI({
     apiKey: llmConfig.apiKey,
@@ -137,7 +147,7 @@ export async function callLLM(
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: 'system', content: SYSTEM_PROMPT },
-    { role: 'user', content: buildUserMessage(instruction, snapshot, type) },
+    { role: 'user', content: buildUserMessage(instruction, snapshot, type, visionContext) },
   ]
 
   let lastError: Error | null = null

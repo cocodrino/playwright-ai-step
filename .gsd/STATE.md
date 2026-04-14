@@ -26,12 +26,21 @@ Status: executing
 - README.md complete
 - Ollama baseURL: https://ollama.com/v1 (corrected)
 
-## Phase 3 Status: IN PROGRESS
-- Task 1: Selector retry with context enrichment
-- Task 2: Vision module (screenshot + DOM matching)
-- Task 3: Improved prompts for query/assert actions
-- Task 4: Self-healing strategy chain
-- Task 5: Phase 3 verification tests
+## Phase 3 Status: COMPLETE ✅
+- 13 unit tests + 5 integration tests = 18/18 passing
+- Strategy registry with configurable fallback order
+- resolveSelectorWithRetry: 3 attempts per strategy with escalation
+- query extraction='title' → page.title() (no DOM needed)
+- Vision module: screenshot capture, off by default
+- Improved prompts with few-shot examples
+- Pushed to GitHub
+
+## Phase 4 Status: IN PROGRESS
+- Task 1: Vision + DOM fusion (screenshot in prompt)
+- Task 2: Multi-page navigation with AI-guided flows
+- Task 3: Recording mode (capture user actions → generate ai() code)
+- Task 4: Page object patterns + multi-step flows
+- Task 5: Phase 4 verification tests
 
 ## Phase 3 Issue from Phase 2
 - "query page title text" fails because LLM picks h1 but selector resolver doesn't find it via role+text fallback. Fix: retry with element text extracted and sent back to LLM.
