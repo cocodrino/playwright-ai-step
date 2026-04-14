@@ -19,7 +19,7 @@ export interface LLMCommand {
   }
   query?: {
     selectors: string[]
-    extraction: 'text' | 'attribute' | 'count'
+    extraction: 'text' | 'attribute' | 'count' | 'title'
     attribute?: string
   }
   reasoning: string

@@ -167,6 +167,6 @@ describe('Selector Resolver', () => {
 
     expect(error).toContain('ai() failed to resolve selector')
     expect(error).toContain('confidence: 0.3')
-    expect(error).toContain('Tried:')
+    expect(error).toContain('Strategy history:')
   })
 })

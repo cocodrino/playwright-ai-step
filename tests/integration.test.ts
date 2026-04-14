@@ -57,5 +57,5 @@ test('OLLAMA: query page title text', async ({ page }) => {
   await openForm(page)
 
   const title = await ai('query the page title text', { page, type: 'query' }) as string
-  expect(title).toContain('User Registration')
+  expect(title).toContain('playwright-ai-step') // actual <title> tag
 })

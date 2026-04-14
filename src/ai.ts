@@ -1,9 +1,10 @@
 // Core ai() function — orchestrates DOM capture → LLM → Playwright execution
 
+import type { Page } from '@playwright/test'
 import { serializePage } from './dom-serializer'
 import { resolveLLMConfig } from './config'
 import { callLLM } from './llm-client'
-import { resolveSelector, buildSelectorError } from './selector-resolver'
+import { resolveSelectorWithRetry, buildSelectorError } from './selector-resolver'
 import type { AiOptions, LLMCommand } from './types'
 import { DEFAULT_DEBUG_CONFIG } from './types'
 
@@ -61,7 +62,6 @@ async function executeAssert(
       return true
     }
     case 'attribute': {
-      if (!command.selector) throw new Error('Attribute assertion requires a selector')
       const attrVal = await locator.getAttribute(assertion.attribute ?? '')
       if (attrVal !== String(assertion.expected)) {
         throw new Error(`Assertion failed: expected ${assertion.attribute}="${assertion.expected}", got "${attrVal}"`)
@@ -74,11 +74,17 @@ async function executeAssert(
 }
 
 async function executeQuery(
-  locator: import('@playwright/test').Locator,
+  page: Page,
   command: LLMCommand,
+  locator: import('@playwright/test').Locator,
 ): Promise<string | number> {
   const q = command.query
   if (!q) throw new Error('query action missing query object')
+
+  // Special case: querying page title directly
+  if (q.extraction === 'title') {
+    return page.title()
+  }
 
   switch (q.extraction) {
     case 'text':
@@ -113,17 +119,22 @@ export async function ai(
       )
     }
 
-    const locator = await resolveSelector(options.page, command, snapshot, debug.verbose)
+    // Try to resolve selector with retry (3 attempts with context enrichment)
+    const { locator, attempts } = await resolveSelectorWithRetry(
+      options.page,
+      command,
+      debug.verbose,
+    )
 
     if (!locator) {
-      const errorMsg = buildSelectorError(command, snapshot)
-      throw new Error(`ai() selector resolution failed.\n${errorMsg}\n  Instruction: "${inst}"`)
+      const errorMsg = buildSelectorError(command, snapshot, attempts)
+      throw new Error(`ai() selector resolution failed after ${attempts.length} attempts.\n${errorMsg}\n  Instruction: "${inst}"`)
     }
 
     if (type === 'assert' || command.action === 'assert') {
       return await executeAssert(command, locator)
     } else if (type === 'query' || command.action === 'query') {
-      return await executeQuery(locator, command)
+      return await executeQuery(options.page, command, locator)
     } else {
       await executeAction(command, locator)
     }
