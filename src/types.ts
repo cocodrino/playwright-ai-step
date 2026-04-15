@@ -5,7 +5,7 @@ import type { Page, TestInfo } from '@playwright/test'
 // ─── LLM Command (what the LLM returns) ──────────────────────────────────
 
 export interface LLMCommand {
-  action: 'click' | 'type' | 'hover' | 'select' | 'scroll' | 'wait' | 'assert' | 'query' | 'fail'
+  action: 'click' | 'type' | 'hover' | 'select' | 'scroll' | 'wait' | 'assert' | 'query' | 'extract' | 'fail'
   selector?: string
   value?: string
   role?: string
@@ -23,8 +23,9 @@ export interface LLMCommand {
     attribute?: string
   }
   reasoning: string
-  confidence: number // 0.0–1.0
+  confidence: number // 0.0-1.0
   reason?: string // for 'fail' action
+  extractedData?: unknown // for 'extract' type
 }
 
 // ─── DOM Serialization ─────────────────────────────────────────────────
@@ -96,13 +97,15 @@ export interface AiConfig {
 
 // ─── ai() options ──────────────────────────────────────────────────────
 
-export type InstructionType = 'action' | 'assert' | 'query'
+export type InstructionType = 'action' | 'assert' | 'query' | 'extract'
 
 export interface AiOptions {
   page: Page
   test?: TestInfo
   type?: InstructionType
   model?: string
+  /** JSON schema describing the data to extract (for type: 'extract') */
+  schema?: Record<string, unknown>
 }
 
 // ─── Fixture types ─────────────────────────────────────────────────────
