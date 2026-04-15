@@ -159,7 +159,7 @@ test.describe("YouTube Search", () => {
 					}],
 				},
 			},
-		) as { videos: Array<{ title: string; url: string; channel: string; views: string; posted: string }> }
+		) as unknown as { videos: Array<{ title: string; url: string; channel: string; views: string; posted: string }> }
 
 		expect(videos.videos.length).toBeGreaterThan(0)
 		const first = videos.videos[0]
@@ -197,7 +197,7 @@ test.describe("YouTube Search", () => {
 					}],
 				},
 			},
-		) as { videos: Array<{ title: string; url: string; channel: string; views: string }> }
+		) as unknown as { videos: Array<{ title: string; url: string; channel: string; views: string }> }
 
 		expect(searchResults.videos.length).toBeGreaterThan(0)
 		console.log(`\n✅ Found ${searchResults.videos.length} videos`)
@@ -222,7 +222,7 @@ test.describe("YouTube Search", () => {
 						}],
 					},
 				},
-			) as { comments: Array<{ username: string; text: string; likes: string }> }
+			) as unknown as { comments: Array<{ username: string; text: string; likes: string }> }
 
 			console.log(`\n📹 ${video.title}`)
 			console.log(`   Channel: ${video.channel} | ${video.views}`)
