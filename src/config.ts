@@ -30,6 +30,21 @@ function loadEnvFile(): void {
 
 loadEnvFile()
 
+// ─── PAS_ prefixed env vars (all PAS_LLM_* variables) ─────────────────────
+//
+//PAS_LLM_PROVIDER=ollama           → provider selection
+//PAS_LLM_API_KEY=...              → fallback API key
+//PAS_LLM_BASE_URL=https://...     → fallback base URL
+//PAS_LLM_MODEL=gemma4:31b        → fallback model
+//PAS_LLM_MAX_TOKENS=512           → max tokens in response
+//PAS_LLM_TEMPERATURE=0.1          → temperature
+//PAS_LLM_TIMEOUT_MS=30000         → request timeout
+//
+//Provider-specific overrides (take priority over PAS_LLM_*):
+//  Ollama:   PAS_OLLAMA_API_KEY, PAS_OLLAMA_BASE_URL, PAS_OLLAMA_MODEL
+//  MiniMax:  PAS_MINIMAX_API_KEY, PAS_MINIMAX_BASE_URL, PAS_MINIMAX_MODEL
+//  OpenAI:   PAS_OPENAI_API_KEY, PAS_OPENAI_BASE_URL, PAS_OPENAI_MODEL
+
 // ─── Provider configs ─────────────────────────────────────────────────────
 
 interface ProviderSpec {
@@ -39,59 +54,65 @@ interface ProviderSpec {
   model: string
 }
 
+function getEnv(key: string, fallback = ''): string {
+  return process.env[key] ?? fallback
+}
+
 function detectProvider(): LLMProvider {
-  const explicit = process.env.LLM_PROVIDER
+  const explicit = getEnv('PAS_LLM_PROVIDER')
   if (explicit) return explicit as LLMProvider
 
   // Auto-detect from baseUrl
-  const url = (process.env.LLM_BASE_URL ?? '').toLowerCase()
+  const url = getEnv('PAS_LLM_BASE_URL').toLowerCase()
   if (url.includes('localhost') || url.includes('ollama')) return 'ollama'
   if (url.includes('minimax')) return 'minimax'
   if (url.includes('openai')) return 'openai'
 
-  // Default
   return 'ollama'
 }
 
 function resolveProviderConfig(provider: LLMProvider): ProviderSpec {
+  const pas = (suffix: string) => `PAS_LLM_${suffix}`
+  const pasProvider = (p: string, suffix: string) => `PAS_${p.toUpperCase()}_${suffix}`
+
+  const pasApiKey = getEnv(pas('API_KEY'))
+  const pasBaseUrl = getEnv(pas('BASE_URL'))
+  const pasModel = getEnv(pas('MODEL'))
+
   switch (provider) {
     case 'ollama':
       return {
         provider: 'ollama',
-        apiKey: process.env.OLLAMA_API_KEY ?? process.env.LLM_API_KEY ?? '',
-        baseUrl: process.env.OLLAMA_BASE_URL ?? process.env.LLM_BASE_URL ?? 'https://ollama.com/v1',
-        model: process.env.OLLAMA_MODEL ?? process.env.LLM_MODEL ?? 'gemma4:31b',
+        apiKey: getEnv(pasProvider('ollama', 'API_KEY')) || getEnv('PAS_OLLAMA_API_KEY') || pasApiKey || '',
+        baseUrl: getEnv('PAS_OLLAMA_BASE_URL') || getEnv('OLLAMA_BASE_URL') || pasBaseUrl || 'https://ollama.com/v1',
+        model: getEnv('PAS_OLLAMA_MODEL') || getEnv('OLLAMA_MODEL') || pasModel || 'gemma4:31b',
       }
-
     case 'minimax':
       return {
         provider: 'minimax',
-        apiKey: process.env.MINIMAX_API_KEY ?? process.env.LLM_API_KEY ?? '',
-        baseUrl: process.env.MINIMAX_BASE_URL ?? process.env.LLM_BASE_URL ?? 'https://api.minimax.io/v1',
-        model: process.env.MINIMAX_MODEL ?? process.env.LLM_MODEL ?? 'MiniMax-M2.7',
+        apiKey: getEnv(pasProvider('minimax', 'API_KEY')) || getEnv('PAS_MINIMAX_API_KEY') || getEnv('MINIMAX_API_KEY') || pasApiKey || '',
+        baseUrl: getEnv('PAS_MINIMAX_BASE_URL') || getEnv('MINIMAX_BASE_URL') || pasBaseUrl || 'https://api.minimax.io/v1',
+        model: getEnv('PAS_MINIMAX_MODEL') || getEnv('MINIMAX_MODEL') || pasModel || 'MiniMax-M2.7',
       }
-
     case 'openai':
       return {
         provider: 'openai',
-        apiKey: process.env.OPENAI_API_KEY ?? process.env.LLM_API_KEY ?? '',
-        baseUrl: process.env.OPENAI_BASE_URL ?? process.env.LLM_BASE_URL ?? 'https://api.openai.com/v1',
-        model: process.env.OPENAI_MODEL ?? process.env.LLM_MODEL ?? 'gpt-4o',
+        apiKey: getEnv(pasProvider('openai', 'API_KEY')) || getEnv('PAS_OPENAI_API_KEY') || getEnv('OPENAI_API_KEY') || pasApiKey || '',
+        baseUrl: getEnv('PAS_OPENAI_BASE_URL') || getEnv('OPENAI_BASE_URL') || pasBaseUrl || 'https://api.openai.com/v1',
+        model: getEnv('PAS_OPENAI_MODEL') || getEnv('OPENAI_MODEL') || pasModel || 'gpt-4o',
       }
-
     case 'custom':
       return {
         provider: 'custom',
-        apiKey: process.env.LLM_API_KEY ?? '',
-        baseUrl: process.env.LLM_BASE_URL ?? 'https://api.example.com/v1',
-        model: process.env.LLM_MODEL ?? 'gpt-4o',
+        apiKey: pasApiKey || '',
+        baseUrl: pasBaseUrl || 'https://api.example.com/v1',
+        model: pasModel || 'gpt-4o',
       }
-
     default:
       return {
         provider: 'ollama',
-        apiKey: process.env.OLLAMA_API_KEY ?? '',
-        baseUrl: 'https://api.ollama.com/v1',
+        apiKey: getEnv('PAS_OLLAMA_API_KEY') || getEnv('OLLAMA_API_KEY') || '',
+        baseUrl: 'https://ollama.com/v1',
         model: 'gemma4:31b',
       }
   }
@@ -108,9 +129,9 @@ export function resolveLLMConfig(): LLMConfig {
     apiKey: spec.apiKey,
     baseUrl: spec.baseUrl,
     model: spec.model,
-    maxTokens: parseInt(process.env.LLM_MAX_TOKENS ?? '') || DEFAULT_LLM_CONFIG.maxTokens,
-    temperature: parseFloat(process.env.LLM_TEMPERATURE ?? '') || DEFAULT_LLM_CONFIG.temperature,
-    timeoutMs: parseInt(process.env.LLM_TIMEOUT_MS ?? '') || DEFAULT_LLM_CONFIG.timeoutMs,
+    maxTokens: parseInt(getEnv('PAS_LLM_MAX_TOKENS') || getEnv('LLM_MAX_TOKENS') || '') || DEFAULT_LLM_CONFIG.maxTokens,
+    temperature: parseFloat(getEnv('PAS_LLM_TEMPERATURE') || getEnv('LLM_TEMPERATURE') || '') || DEFAULT_LLM_CONFIG.temperature,
+    timeoutMs: parseInt(getEnv('PAS_LLM_TIMEOUT_MS') || getEnv('LLM_TIMEOUT_MS') || '') || DEFAULT_LLM_CONFIG.timeoutMs,
   }
 }
 
@@ -126,15 +147,11 @@ export function loadConfig(overrides?: Partial<AiConfig>): AiConfig {
 export function checkApiKey(): void {
   const config = resolveLLMConfig()
   if (!config.apiKey) {
-    console.warn('[playwright-ai-step] WARNING: No API key set for provider "' + config.provider + '".')
-    console.warn('  Set via LLM_PROVIDER env var and the corresponding *_API_KEY.')
-    console.warn('  Example: LLM_PROVIDER=ollama OLLAMA_API_KEY=your_key')
+    console.warn('[playwright-ai-step] WARNING: No API key set. Set PAS_OLLAMA_API_KEY or PAS_MINIMAX_API_KEY in .env')
   } else {
-    console.log('[playwright-ai-step] LLM provider: ' + config.provider + ' | model: ' + config.model + ' | baseURL: ' + config.baseUrl)
+    console.log('[playwright-ai-step] LLM: ' + config.provider + ' | ' + config.model + ' | ' + config.baseUrl)
   }
 }
-
-// ─── Provider switching helper (for tests) ────────────────────────────────
 
 export function getActiveProvider(): { provider: LLMProvider; model: string; baseUrl: string } {
   const config = resolveLLMConfig()

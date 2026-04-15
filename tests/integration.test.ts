@@ -11,7 +11,7 @@ const __dirname = dirname(__filename)
 
 // Guard: skip all tests when not using @playwright/test runner
 // These run only via: LLM_API_KEY=... bunx playwright test
-const IS_PLAYWRIGHT = process.env.OLLAMA_API_KEY
+const IS_PLAYWRIGHT = process.env.PAS_OLLAMA_API_KEY || process.env.OLLAMA_API_KEY
 const test = IS_PLAYWRIGHT ? pwTest : (pwTest as any).skip
 
 async function openForm(page: import('@playwright/test').Page) {

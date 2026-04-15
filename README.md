@@ -52,14 +52,14 @@ bun add playwright-ai-step
 
 ```bash
 # Ollama Cloud (gemma4:31b — recommended for free tier)
-LLM_PROVIDER=ollama
-OLLAMA_API_KEY=your_ollama_cloud_key
-OLLAMA_MODEL=gemma4:31b
+PAS_LLM_PROVIDER=ollama
+PAS_OLLAMA_API_KEY=your_ollama_cloud_key
+PAS_OLLAMA_MODEL=gemma4:31b
 
 # OR MiniMax (MiniMax-M2.7 — higher quality, pay-per-token)
-LLM_PROVIDER=minimax
-MINIMAX_API_KEY=your_minimax_key
-MINIMAX_MODEL=MiniMax-M2.7
+PAS_LLM_PROVIDER=minimax
+PAS_MINIMAX_API_KEY=your_minimax_key
+PAS_MINIMAX_MODEL=MiniMax-M2.7
 ```
 
 ### 3. Write your first test
@@ -97,10 +97,10 @@ npm test
 ### Ollama Cloud (Recommended — free tier available)
 
 ```bash
-export LLM_PROVIDER=ollama
-export OLLAMA_API_KEY=your_key_from_ollama.com/cloud
-export OLLAMA_BASE_URL=https://api.ollama.com/v1
-export OLLAMA_MODEL=gemma4:31b
+export PAS_LLM_PROVIDER=ollama
+export PAS_OLLAMA_API_KEY=your_key_from_ollama.com/cloud
+export PAS_OLLAMA_BASE_URL=https://ollama.com/v1
+export PAS_OLLAMA_MODEL=gemma4:31b
 ```
 
 Models available: `gemma4:31b`, `minimax-m2.7`, `qwen3.5:397b`, `qwen3-coder:480b`, and 40,000+ more.
@@ -108,27 +108,27 @@ Models available: `gemma4:31b`, `minimax-m2.7`, `qwen3.5:397b`, `qwen3-coder:480
 ### MiniMax
 
 ```bash
-export LLM_PROVIDER=minimax
-export MINIMAX_API_KEY=your_key_from_platform.minimax.io
-export MINIMAX_BASE_URL=https://api.minimax.io/v1
-export MINIMAX_MODEL=MiniMax-M2.7
+export PAS_LLM_PROVIDER=minimax
+export PAS_MINIMAX_API_KEY=your_key_from_platform.minimax.io
+export PAS_MINIMAX_BASE_URL=https://api.minimax.io/v1
+export PAS_MINIMAX_MODEL=MiniMax-M2.7
 ```
 
 ### OpenAI
 
 ```bash
-export LLM_PROVIDER=openai
-export OPENAI_API_KEY=sk-...
-export OPENAI_MODEL=gpt-4o
+export PAS_LLM_PROVIDER=openai
+export PAS_OPENAI_API_KEY=sk-...
+export PAS_OPENAI_MODEL=gpt-4o
 ```
 
 ### Local Ollama
 
 ```bash
-export LLM_PROVIDER=ollama
-export OLLAMA_API_KEY=not-required
-export OLLAMA_BASE_URL=http://localhost:11434/v1
-export OLLAMA_MODEL=gemma4:31b
+export PAS_LLM_PROVIDER=ollama
+export PAS_OLLAMA_API_KEY=not-required
+export PAS_OLLAMA_BASE_URL=http://localhost:11434/v1
+export PAS_OLLAMA_MODEL=gemma4:31b
 ```
 
 ### Switching providers
@@ -137,31 +137,33 @@ The only thing that changes is the environment variables. No code changes needed
 
 ```bash
 # Use Ollama
-LLM_PROVIDER=ollama OLLAMA_API_KEY=... bun test
+PAS_LLM_PROVIDER=ollama PAS_OLLAMA_API_KEY=... bun test
 
 # Use MiniMax
-LLM_PROVIDER=minimax MINIMAX_API_KEY=... bun test
+PAS_LLM_PROVIDER=minimax PAS_MINIMAX_API_KEY=... bun test
 ```
 
 ## Environment Variables
 
+All configuration is through `PAS_LLM_*` environment variables.
+
 | Variable | Default | Description |
 |---|---|---|
-| `LLM_PROVIDER` | `ollama` | Provider: `ollama`, `minimax`, `openai`, `custom` |
-| `LLM_API_KEY` | — | Fallback API key (used if provider-specific key not set) |
-| `LLM_BASE_URL` | `https://api.ollama.com/v1` | Base URL for the LLM API |
-| `LLM_MODEL` | `gemma4:31b` | Model name |
-| `LLM_MAX_TOKENS` | `512` | Max tokens in LLM response |
-| `LLM_TEMPERATURE` | `0.1` | LLM temperature (lower = more deterministic) |
-| `LLM_TIMEOUT_MS` | `30000` | Request timeout in milliseconds |
+| `PAS_LLM_PROVIDER` | `ollama` | Provider: `ollama`, `minimax`, `openai`, `custom` |
+| `PAS_LLM_API_KEY` | — | Fallback API key (used if provider-specific key not set) |
+| `PAS_LLM_BASE_URL` | `https://ollama.com/v1` | Base URL for the LLM API |
+| `PAS_LLM_MODEL` | `gemma4:31b` | Model name |
+| `PAS_LLM_MAX_TOKENS` | `512` | Max tokens in LLM response |
+| `PAS_LLM_TEMPERATURE` | `0.1` | LLM temperature (lower = more deterministic) |
+| `PAS_LLM_TIMEOUT_MS` | `30000` | Request timeout in milliseconds |
 
-Provider-specific overrides (take priority over LLM_* vars):
+Provider-specific overrides (take priority over `PAS_LLM_*`):
 
 | Variable | Provider |
 |---|---|
-| `OLLAMA_API_KEY`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | Ollama |
-| `MINIMAX_API_KEY`, `MINIMAX_BASE_URL`, `MINIMAX_MODEL` | MiniMax |
-| `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL` | OpenAI |
+| `PAS_OLLAMA_API_KEY`, `PAS_OLLAMA_BASE_URL`, `PAS_OLLAMA_MODEL` | Ollama |
+| `PAS_MINIMAX_API_KEY`, `PAS_MINIMAX_BASE_URL`, `PAS_MINIMAX_MODEL` | MiniMax |
+| `PAS_OPENAI_API_KEY`, `PAS_OPENAI_BASE_URL`, `PAS_OPENAI_MODEL` | OpenAI |
 
 ## API
 
@@ -230,7 +232,7 @@ bun run typecheck
 bun test
 
 # Run with real LLM (requires API keys in .env)
-OLLAMA_API_KEY=... bun test tests/integration.test.ts
+PAS_OLLAMA_API_KEY=... bun test tests/integration.test.ts
 
 # Build for distribution
 bun run build
@@ -255,6 +257,9 @@ playwright-ai-step/
 │   ├── integration.test.ts  # Real LLM calls (requires API key)
 │   └── pages/
 │       └── example-form.html
+├── sample/               # Example test suites (YouTube, Wikipedia, etc.)
+│   ├── youtube-search.spec.ts
+│   └── README.md
 ├── .github/workflows/test.yml
 ├── .gsd/                 # GSD workflow files
 │   ├── CONTEXT.md        # Project decisions
@@ -266,6 +271,17 @@ playwright-ai-step/
 ├── tsconfig.json
 └── README.md
 ```
+
+## Sample Tests
+
+The `sample/` directory contains ready-to-run test suites for popular websites. Each sample demonstrates a real-world workflow and serves as both documentation and regression tests.
+
+```bash
+# YouTube search workflow
+PAS_OLLAMA_API_KEY=... bun test sample/youtube-search.spec.ts
+```
+
+See [sample/README.md](sample/README.md) for the full list of available samples and setup instructions.
 
 ## Roadmap (GSD Phases)
 

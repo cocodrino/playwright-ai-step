@@ -9,7 +9,8 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run tests/unit.test.ts tests/error-handling.test.ts",
-    "test:integration": "OLLAMA_API_KEY=YOUR_API_KEY_HERE LLM_PROVIDER=ollama OLLAMA_MODEL=gemma4:31b bunx playwright test tests/integration.test.ts",
+    "test:integration": "PAS_OLLAMA_API_KEY=YOUR_API_KEY_HERE PAS_LLM_PROVIDER=ollama PAS_OLLAMA_MODEL=gemma4:31b bunx playwright test tests/integration.test.ts",
+    "test:sample": "bunx playwright test sample/",
     "cli": "bun run src/cli.ts",
     "generate": "bun run src/cli.ts generate",
     "sitemap": "bun run src/cli.ts sitemap"
