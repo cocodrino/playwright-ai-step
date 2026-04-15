@@ -160,21 +160,13 @@ export async function ai(
 
   for (const inst of instructions) {
     const type = options.type ?? 'action'
-    const command = await callLLM(inst, snapshot, type, config, visionContext, options.schema)
+    const command = await callLLM(inst, snapshot, type, config, visionContext)
 
     if (command.action === 'fail') {
       throw new Error(
         `ai() failed: ${command.reason ?? command.reasoning ?? 'unknown error'}\n` +
         `  Instruction: "${inst}"\n  confidence: ${command.confidence}`
       )
-    }
-
-    // Extract mode: return structured JSON directly
-    if (type === 'extract') {
-      if (command.extractedData === undefined) {
-        throw new Error(`ai() extract: no data returned. LLM said: ${command.reasoning}`)
-      }
-      return command.extractedData as boolean | string | number
     }
 
     const { locator, attempts } = await resolveSelectorWithRetry(

@@ -3,35 +3,7 @@
 import OpenAI from 'openai'
 import type { LLMConfig, LLMCommand, DOMSnapshot, InstructionType } from './types'
 
-// ─── Extract mode ─────────────────────────────────────────────────────────
-
-const EXTRACT_SYSTEM_PROMPT = `You are a data extraction expert. Given a page DOM and a user query, extract structured data and return it as valid JSON.
-
-IMPORTANT — Return ONLY valid JSON, nothing else. No markdown, no code fences, no text outside the JSON.
-
-Rules:
-- Return a JSON object matching the schema — keys must match exactly
-- String fields: use the exact visible text from the DOM
-- Number fields: extract the numeric value (remove commas, K/M/B suffixes where needed)
-- If a field is not found on the page, use null
-- For URLs: always return the complete watch/share URL (https://www.youtube.com/watch?v=...)
-- Be thorough — extract ALL matching items, not just the first one
-- Dates/times: preserve the human-readable format from the page
-
-Schema to follow:
-{SCHEMA}
-
-Examples:
-Schema: {"videos": [{"title": "string", "url": "string", "channel": "string"}]}
-Instruction: "extract all video results"
-→ [{"title":"TypeScript Tutorial 2025","url":"https://www.youtube.com/watch?v=abc123","channel":"Traversy Media"},...]
-
-Schema: {"comments": [{"username": "string", "text": "string", "likes": "string"}]}
-Instruction: "extract the top 5 comments"
-→ [{"username":"john_doe","text":"Great tutorial!","likes":"42"},...]`
-
-// ─── Standard mode ────────────────────────────────────────────────────────
-
+// Few-shot examples embedded in system prompt for better accuracy
 const SYSTEM_PROMPT = `You are a Playwright test automation expert.
 Given a DOM description and a user instruction, return a JSON command to execute.
 
@@ -80,47 +52,6 @@ Instruction: "query the submit button text"
 
 Instruction: "query the checkbox is checked"
 → {"action":"query","selector":"[data-testid='terms-checkbox']","query":{"extraction":"attribute","attribute":"checked"},"reasoning":"Getting checked attribute from checkbox","confidence":0.85}`
-
-function buildExtractUserMessage(
-  instruction: string,
-  snapshot: DOMSnapshot,
-  schema: Record<string, unknown>,
-  visionContext?: import('./vision').VisionPromptParts,
-): string {
-  const elementList = snapshot.elements
-    .filter(el => el.isVisible && (el.textContent || el.placeholder || el.role))
-    .slice(0, 120)
-    .map(el => {
-      const parts: string[] = []
-      if (el.role && el.role !== el.tagName) parts.push(`[${el.role}]`)
-      if (el.tagName) parts.push(`<${el.tagName}>`)
-      if (el.id) parts.push(`#${el.id}`)
-      if (el.dataTestId) parts.push(`[data-testid="${el.dataTestId}"]`)
-      if (el.textContent) parts.push(`"${el.textContent}"`)
-      if (el.placeholder) parts.push(`placeholder="${el.placeholder}"`)
-      if (el.ariaLabel) parts.push(`aria="${el.ariaLabel}"`)
-      return parts.join(' ')
-    })
-    .join('\n')
-
-  const vision = visionContext
-    ? `\n\n${visionContext.visualContext}\n[Screenshot available for vision]`
-    : ''
-
-  return `URL: ${snapshot.url}
-Title: ${snapshot.title}
-
-[VISIBLE ELEMENTS] (max 120 shown):
-${elementList || '(no visible elements)'}${vision}
-
-[EXTRACTION TASK]
-Query: ${instruction}
-
-[JSON SCHEMA — follow this schema exactly]
-${JSON.stringify(schema, null, 2)}
-
-Return ONLY valid JSON. Nothing else:`
-}
 
 function buildUserMessage(
   instruction: string,
@@ -207,7 +138,6 @@ export async function callLLM(
   type: InstructionType,
   llmConfig: LLMConfig,
   visionContext?: import('./vision').VisionPromptParts,
-  schema?: Record<string, unknown>,
 ): Promise<LLMCommand> {
   const client = new OpenAI({
     apiKey: llmConfig.apiKey,
@@ -215,63 +145,6 @@ export async function callLLM(
     timeout: llmConfig.timeoutMs,
   })
 
-  // ── Extract mode ────────────────────────────────────────────────────────
-  if (type === 'extract') {
-    const systemPrompt = EXTRACT_SYSTEM_PROMPT.replace('{SCHEMA}', JSON.stringify(schema ?? {}, null, 2))
-    const userMsg = buildExtractUserMessage(instruction, snapshot, schema ?? {}, visionContext)
-
-    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userMsg },
-    ]
-
-    let lastError: Error | null = null
-    for (let attempt = 0; attempt <= 2; attempt++) {
-      try {
-        const response = await client.chat.completions.create({
-          model: llmConfig.model,
-          messages,
-          max_tokens: 4096,
-          temperature: 0.1,
-        })
-        const content = response.choices[0]?.message?.content ?? ''
-
-        let jsonStr = content.trim()
-        if (jsonStr.startsWith('```')) {
-          const fenceEnd = jsonStr.indexOf('\n')
-          jsonStr = jsonStr.slice(fenceEnd + 1)
-          const fenceClose = jsonStr.lastIndexOf('```')
-          if (fenceClose > 0) jsonStr = jsonStr.slice(0, fenceClose)
-        }
-        const parsed = JSON.parse(jsonStr.trim())
-
-        return {
-          action: 'extract',
-          reasoning: content.slice(0, 100),
-          confidence: 1.0,
-          extractedData: parsed,
-        }
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err))
-        const msg = lastError.message
-        const isRetryable = msg.includes('429') || msg.includes('500') || msg.includes('502') ||
-          msg.includes('503') || msg.includes('rate') || msg.includes('timeout') ||
-          msg.includes('JSON')
-        if (!isRetryable || attempt === 2) {
-          return {
-            action: 'fail',
-            reasoning: '',
-            confidence: 0,
-            reason: `extract failed after ${attempt + 1} attempts: ${lastError.message}`.slice(0, 500),
-          }
-        }
-        await new Promise(r => setTimeout(r, 500 * (attempt + 1)))
-      }
-    }
-    throw lastError
-  }
-
-  // ── Standard mode (action / assert / query) ─────────────────────────────
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: 'system', content: SYSTEM_PROMPT },
     { role: 'user', content: buildUserMessage(instruction, snapshot, type, visionContext) },
