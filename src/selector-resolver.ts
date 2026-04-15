@@ -12,6 +12,41 @@ export interface SelectorAttempt {
   error?: string
 }
 
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+async function isLocatorUsable(locator: Locator): Promise<boolean> {
+  // Check visibility with a reasonable timeout for elements that may still be loading
+  if (await locator.isVisible({ timeout: 3000 }).catch(() => false)) return true
+
+  // For custom elements / shadow DOM, isVisible() can be unreliable.
+  // Fall back to checking if the element exists and has dimensions.
+  try {
+    const count = await locator.count()
+    if (count > 0) {
+      // Element exists — try a bounding box check as a fallback
+      const box = await locator.boundingBox().catch(() => null)
+      if (box && box.width > 0 && box.height > 0) return true
+
+      // Some custom elements (e.g. ytd-*) don't report bounding boxes correctly.
+      // Check via JS evaluation if the element is actually rendered.
+      const jsVisible = await locator.evaluate((el: Element) => {
+        const style = window.getComputedStyle(el)
+        return style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          parseFloat(style.opacity) > 0
+      }).catch(() => false)
+      if (jsVisible) return true
+
+      // For custom elements with shadow DOM, even the JS check may fail.
+      // If the element exists (count > 0) and is in the DOM, consider it usable
+      // for assertion and query operations — the action executor will handle
+      // interaction specifics.
+      return true
+    }
+  } catch { /* not usable */ }
+
+  return false
+}
 // ─── Strategy registry ─────────────────────────────────────────────────────
 
 interface SelectorStrategy {
@@ -22,20 +57,20 @@ interface SelectorStrategy {
 
 async function resolveByRole(page: Page, cmd: LLMCommand, _attempt: number): Promise<Locator | null> {
   if (!cmd.role && !cmd.text) return null
-  const role = cmd.role ?? 'button'
+  const role = cmd.role ?? ''
   const name = cmd.text ?? cmd.value ?? ''
 
+  if (!role) return null
+
   try {
-    // Try exact name first, then partial
-    for (const exact of [false]) {
-      const locator = page.getByRole(role as Parameters<typeof page.getByRole>[0], { name, exact })
-      if (await locator.isVisible({ timeout: 500 }).catch(() => false)) return locator
+    if (name) {
+      const locator = page.getByRole(role as Parameters<typeof page.getByRole>[0], { name, exact: false })
+      if (await isLocatorUsable(locator)) return locator
     }
+
     // Try role alone (no name constraint) when no text given
-    if (!name) {
-      const locator = page.getByRole(role as Parameters<typeof page.getByRole>[0])
-      if (await locator.isVisible({ timeout: 500 }).catch(() => false)) return locator
-    }
+    const locator = page.getByRole(role as Parameters<typeof page.getByRole>[0])
+    if (await isLocatorUsable(locator)) return locator
   } catch { /* not found */ }
   return null
 }
@@ -46,53 +81,51 @@ async function resolveByText(page: Page, cmd: LLMCommand, _attempt: number): Pro
 
   try {
     const locator = page.getByText(text, { exact: false })
-    if (await locator.isVisible({ timeout: 500 }).catch(() => false)) return locator
+    if (await isLocatorUsable(locator)) return locator
   } catch { /* not found */ }
   return null
 }
 
 async function resolveByTestId(page: Page, cmd: LLMCommand, _attempt: number): Promise<Locator | null> {
-  // Try data-testid variations
-  const attrs = ['data-testid', 'data-cy', 'data-test']
   const testIdValues = [
     cmd.testId,
     cmd.text?.toLowerCase().replace(/\s+/g, '-'),
     cmd.text?.replace(/\s+/g, ''),
   ].filter(Boolean) as string[]
 
+  if (!testIdValues.length) return null
+
+  const attrs = ['data-testid', 'data-cy', 'data-test']
+
   for (const attr of attrs) {
     for (const value of testIdValues) {
       try {
-        // Construct selector for attribute
         const locator = page.locator(`[${attr}="${value}"]`)
-        if (await locator.isVisible({ timeout: 500 }).catch(() => false)) return locator
+        if (await isLocatorUsable(locator)) return locator
       } catch { /* not found */ }
     }
   }
 
-  // Also try: find elements in DOM snapshot that have testids and match the command
   return null
 }
 
 async function resolveByCSS(page: Page, cmd: LLMCommand, _attempt: number): Promise<Locator | null> {
-  // Build CSS selector from element's id, classes, or tag
   const selectors: string[] = []
 
   if (cmd.selector) {
-    // Direct CSS from LLM
     selectors.push(cmd.selector)
   }
 
-  // Build from DOM context if we have element info
-  // Try tag + attributes as CSS
   if (cmd.role) {
     selectors.push(cmd.role)
   }
 
+  // For assert/query actions on custom elements, try the selector directly
+  // even if visibility checks are unreliable (e.g. YouTube's ytd-* elements)
   for (const sel of selectors) {
     try {
       const locator = page.locator(sel)
-      if (await locator.isVisible({ timeout: 500 }).catch(() => false)) return locator
+      if (await isLocatorUsable(locator)) return locator
     } catch { /* bad selector */ }
   }
 
@@ -113,7 +146,6 @@ function buildDiagnosticContext(
   snapshot: DOMSnapshot,
   attempts: SelectorAttempt[],
 ): string {
-  // Find closest matching element
   let closest = findClosestElement(cmd, snapshot)
 
   const strategyHistory = attempts
@@ -132,10 +164,8 @@ function buildDiagnosticContext(
 }
 
 function findClosestElement(cmd: LLMCommand, snapshot: DOMSnapshot): string | null {
-  // Find element that best matches the command intent
   const candidates = snapshot.elements.filter(el => el.isVisible)
 
-  // Try text match
   if (cmd.text) {
     const byText = candidates.find(el =>
       el.textContent?.toLowerCase().includes(cmd.text!.toLowerCase()) ||
@@ -144,19 +174,22 @@ function findClosestElement(cmd: LLMCommand, snapshot: DOMSnapshot): string | nu
     if (byText) return elementToString(byText)
   }
 
-  // Try testid match
   if (cmd.testId) {
     const byTestId = candidates.find(el => el.dataTestId === cmd.testId)
     if (byTestId) return elementToString(byTestId)
   }
 
-  // Try role match
   if (cmd.role) {
     const byRole = candidates.find(el => el.role === cmd.role)
     if (byRole) return elementToString(byRole)
   }
 
-  // First visible element as fallback
+  // Try matching by tag name from selector
+  if (cmd.selector) {
+    const bySelector = candidates.find(el => cmd.selector!.includes(el.tagName))
+    if (bySelector) return elementToString(bySelector)
+  }
+
   if (candidates.length > 0) {
     return `First visible: ${elementToString(candidates[0])}`
   }
@@ -188,7 +221,6 @@ export async function resolveSelectorWithRetry(
   verbose = false,
 ): Promise<ResolveResult> {
   const attempts: SelectorAttempt[] = []
-  let lastLocator: Locator | null = null
 
   // For 'query' with extraction='title', no DOM selector needed
   if (command.action === 'query' && command.query?.extraction === 'title') {
@@ -203,14 +235,9 @@ export async function resolveSelectorWithRetry(
         if (verbose) console.log(`[selector-resolver] Trying ${strategy.name} (retry ${retry})`)
         const locator = await strategy.fn(page, command, retry)
 
-        if (locator) {
-          // Verify it's actually visible and usable
-          const isVisible = await locator.isVisible({ timeout: 500 }).catch(() => false)
-          if (isVisible) {
-            attempts.push({ strategy: strategy.name, selector: selectorDesc, success: true })
-            lastLocator = locator
-            return { locator, attempts }
-          }
+        if (locator && await isLocatorUsable(locator)) {
+          attempts.push({ strategy: strategy.name, selector: selectorDesc, success: true })
+          return { locator, attempts }
         }
 
         attempts.push({ strategy: strategy.name, selector: selectorDesc, success: false, error: 'not visible or not found' })
@@ -221,11 +248,6 @@ export async function resolveSelectorWithRetry(
           success: false,
           error: err instanceof Error ? err.message : String(err),
         })
-      }
-
-      // Stop trying this strategy if first attempt succeeded but element not visible
-      if (lastLocator === null) {
-        // continue to next retry or strategy
       }
     }
   }

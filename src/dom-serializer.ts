@@ -27,7 +27,7 @@ function sanitizeAttrs(raw: Record<string, string>): Record<string, string> {
 async function serializePage(page: Page): Promise<DOMSnapshot> {
   // All constants must be defined inside page.evaluate so they're in browser context
   const result = await page.evaluate(() => {
-    const MAX_ELEMENTS = 100
+    const MAX_ELEMENTS = 200
     const MAX_DEPTH = 10
 
     function walk(el: Element, depth: number, seen: Set<Element>, out: Element[]) {
@@ -38,6 +38,13 @@ async function serializePage(page: Page): Promise<DOMSnapshot> {
       out.push(el)
       for (let i = 0; i < el.children.length; i++) {
         walk(el.children[i] as Element, depth + 1, seen, out)
+      }
+      // Pierce shadow DOM to capture internal elements
+      const shadowRoot = (el as Element & { shadowRoot?: ShadowRoot }).shadowRoot
+      if (shadowRoot) {
+        for (let i = 0; i < shadowRoot.children.length; i++) {
+          walk(shadowRoot.children[i] as Element, depth + 1, seen, out)
+        }
       }
     }
 
@@ -75,7 +82,8 @@ async function serializePage(page: Page): Promise<DOMSnapshot> {
         placeholder: (el as HTMLInputElement).placeholder ?? '',
         ariaLabel: el.getAttribute('aria-label') ?? '',
         id: el.id,
-        className: el.className,
+        // Handle SVGAnimatedString and other non-string className types
+        className: typeof el.className === 'string' ? el.className : String((el as SVGElement).className?.baseVal ?? ''),
         attributes: rawAttrs,
         box,
         visible,
@@ -96,7 +104,7 @@ async function serializePage(page: Page): Promise<DOMSnapshot> {
         role: el.role,
         tagName: el.tagName,
         id: el.id || undefined,
-        classes: el.className ? el.className.split(' ').filter(Boolean) : undefined,
+        classes: el.className ? String(el.className).split(' ').filter(Boolean) : undefined,
         textContent: truncate(el.textContent, MAX_TEXT_LENGTH),
         placeholder: truncate(el.placeholder, MAX_TEXT_LENGTH),
         ariaLabel: truncate(el.ariaLabel, MAX_TEXT_LENGTH),

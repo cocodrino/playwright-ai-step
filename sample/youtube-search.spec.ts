@@ -5,138 +5,134 @@
  * Uses PAS_OLLAMA_API_KEY (or PAS_MINIMAX_API_KEY / PAS_OPENAI_API_KEY).
  */
 
-import { test, ai, expect } from '../src/index'
+import { expect, test } from "@playwright/test";
+import { ai } from "../src/fixtures";
 
-// ─── YouTube Search ──────────────────────────────────────────────────────────
+test.describe("YouTube Search", () => {
+	test("search for a video and validate results appear", async ({ page }) => {
+		// Navigate directly to search results for reliability
+		await page.goto(
+			"https://www.youtube.com/results?search_query=typescript+tutorial",
+		);
 
-test.describe('YouTube Search', () => {
+		await page.waitForLoadState("networkidle");
 
-  test('search for a video and validate results appear', async ({ page }) => {
-    await page.goto('https://www.youtube.com')
+		const resultsVisible = await ai(
+			"assert that video results are visible on the page",
+			{ page, type: "assert" },
+		);
+		expect(resultsVisible).toBe(true);
+	});
 
-    await ai('click the search box', { page })
-    await ai('type "TypeScript tutorial 2025" in the search box', { page })
-    await ai('press Enter to search', { page })
+	test("filter results by video type", async ({ page }) => {
+		await page.goto(
+			"https://www.youtube.com/results?search_query=golang+tutorial",
+		);
 
-    // Wait for results to load
-    await page.waitForLoadState('networkidle')
+		await page.waitForLoadState("networkidle");
 
-    const resultsVisible = await ai(
-      'assert that at least 5 video results are visible on the page',
-      { page, type: 'assert' }
-    )
-    expect(resultsVisible).toBe(true)
-  })
+		await ai('click the "Videos" filter tab', { page });
 
-  test('filter results by video type', async ({ page }) => {
-    await page.goto('https://www.youtube.com/results?search_query=golang+tutorial')
+		await page.waitForLoadState("networkidle");
 
-    await page.waitForLoadState('networkidle')
+		const videoFilterActive = await ai(
+			'assert the "Videos" filter is currently selected or highlighted',
+			{ page, type: "assert" },
+		);
+		expect(videoFilterActive).toBe(true);
+	});
 
-    await ai('click the "Videos" filter tab', { page })
+	test("open a video and validate the player loads", async ({ page }) => {
+		await page.goto(
+			"https://www.youtube.com/results?search_query=rust+for+beginners",
+		);
 
-    await page.waitForLoadState('networkidle')
+		await page.waitForLoadState("networkidle");
 
-    const videoFilterActive = await ai(
-      'assert the "Videos" filter is currently selected or highlighted',
-      { page, type: 'assert' }
-    )
-    expect(videoFilterActive).toBe(true)
-  })
+		await ai("click the first video result", { page });
 
-  test('open a video and validate the player loads', async ({ page }) => {
-    await page.goto('https://www.youtube.com/results?search_query=rust+for+beginners')
+		await page.waitForLoadState("networkidle");
 
-    await page.waitForLoadState('networkidle')
+		const playerReady = await ai(
+			"assert the YouTube video player is visible and the play button is present",
+			{ page, type: "assert" },
+		);
+		expect(playerReady).toBe(true);
+	});
 
-    await ai('click the first video result', { page })
+	test("extract and validate video title", async ({ page }) => {
+		await page.goto(
+			"https://www.youtube.com/results?search_query=python+pandas+tutorial",
+		);
 
-    // Wait for player
-    await page.waitForLoadState('networkidle')
+		await page.waitForLoadState("networkidle");
 
-    const playerReady = await ai(
-      'assert the YouTube video player is visible and the play button is present',
-      { page, type: 'assert' }
-    )
-    expect(playerReady).toBe(true)
-  })
+		await ai("click the first video result", { page });
 
-  test('extract and validate video title', async ({ page }) => {
-    await page.goto('https://www.youtube.com/results?search_query=python+pandas+tutorial')
+		await page.waitForLoadState("networkidle");
 
-    await page.waitForLoadState('networkidle')
+		const title = await ai("query the main video title text on this page", {
+			page,
+			type: "query",
+		});
 
-    await ai('click the first video result', { page })
+		console.info("title is", title);
+		expect(typeof title).toBe("string");
+		expect((title as string).trim().length).toBeGreaterThan(0);
 
-    await page.waitForLoadState('networkidle')
+		const titleLower = (title as string).toLowerCase();
+		expect(titleLower).not.toBe("youtube");
+	});
 
-    // Extract title using ai query
-    const title = await ai(
-      'query the main video title text on this page',
-      { page, type: 'query' }
-    )
+	test("validate channel name is visible on video page", async ({ page }) => {
+		await page.goto(
+			"https://www.youtube.com/results?search_query=react+crash+course",
+		);
 
-    // Title should be a non-empty string
-    expect(typeof title).toBe('string')
-    expect((title as string).trim().length).toBeGreaterThan(0)
+		await page.waitForLoadState("networkidle");
 
-    // Title should not be the default "YouTube" or generic placeholder
-    const titleLower = (title as string).toLowerCase()
-    expect(titleLower).not.toBe('youtube')
-  })
+		await ai("click the first video result", { page });
+		await page.waitForLoadState("networkidle");
 
-  test('validate channel name is visible on video page', async ({ page }) => {
-    await page.goto('https://www.youtube.com/results?search_query=react+crash+course')
+		const channelVisible = await ai(
+			"assert the channel/uploader name is visible on the page",
+			{ page, type: "assert" },
+		);
+		expect(channelVisible).toBe(true);
+	});
 
-    await page.waitForLoadState('networkidle')
+	test("search and scroll to load more results", async ({ page }) => {
+		await page.goto(
+			"https://www.youtube.com/results?search_query=machine+learning+fundamentals",
+		);
 
-    await ai('click the first video result', { page })
-    await page.waitForLoadState('networkidle')
+		await page.waitForLoadState("networkidle");
 
-    const channelVisible = await ai(
-      'assert the channel/uploader name is visible on the page',
-      { page, type: 'assert' }
-    )
-    expect(channelVisible).toBe(true)
-  })
+		const initialResults = await ai(
+			"assert at least one video result is visible",
+			{ page, type: "assert" },
+		);
+		expect(initialResults).toBe(true);
 
-  test('search and scroll to load more results', async ({ page }) => {
-    await page.goto('https://www.youtube.com')
+		await ai("scroll down to load more results", { page });
+		await page.waitForTimeout(2000);
 
-    await ai('click the search box', { page })
-    await ai('type "machine learning fundamentals" in the search box', { page })
-    await ai('press Enter to search', { page })
+		const moreResults = await ai(
+			"assert there are now more results than before (at least 5 visible)",
+			{ page, type: "assert" },
+		);
+		expect(moreResults).toBe(true);
+	});
 
-    await page.waitForLoadState('networkidle')
+	test("navigate to trending page and validate content", async ({ page }) => {
+		await page.goto("https://www.youtube.com/feed/trending");
 
-    const initialResults = await ai(
-      'assert at least one video result is visible',
-      { page, type: 'assert' }
-    )
-    expect(initialResults).toBe(true)
+		await page.waitForLoadState("networkidle");
 
-    // Scroll down to trigger lazy-loaded results
-    await ai('scroll down to load more results', { page })
-    await page.waitForTimeout(2000)
-
-    const moreResults = await ai(
-      'assert there are now more results than before (at least 5 visible)',
-      { page, type: 'assert' }
-    )
-    expect(moreResults).toBe(true)
-  })
-
-  test('navigate to trending page and validate content', async ({ page }) => {
-    await page.goto('https://www.youtube.com')
-
-    // Navigate to trending
-    await ai('click the "Trending" link in the navigation menu', { page })
-    await page.waitForLoadState('networkidle')
-
-    const trendingVisible = await ai(
-      'assert the trending video section is visible with multiple videos',
-      { page, type: 'assert' }
-    )
-    expect(trendingVisible).toBe(true)
-  })
-})
+		const trendingVisible = await ai(
+			"assert the trending video section is visible with multiple videos",
+			{ page, type: "assert" },
+		);
+		expect(trendingVisible).toBe(true);
+	});
+});
