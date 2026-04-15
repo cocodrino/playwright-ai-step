@@ -135,4 +135,103 @@ test.describe("YouTube Search", () => {
 		);
 		expect(trendingVisible).toBe(true);
 	});
+
+	// ─── Extract: structured video list ─────────────────────────────────
+
+	test("extract structured video list from search results", async ({ page }) => {
+		await page.goto("https://www.youtube.com/results?search_query=TypeScript+tutorial+2025")
+		await page.waitForLoadState("networkidle")
+
+		// Extract structured data from the results page.
+		// The schema tells the LLM exactly what fields to return.
+		const videos = await ai(
+			"extract every video result on this page",
+			{
+				page,
+				type: "extract",
+				schema: {
+					videos: [{
+						title: "string — exact video title as shown on the page",
+						url: "string — full YouTube watch URL (https://www.youtube.com/watch?v=...)",
+						channel: "string — channel / uploader name",
+						views: "string — view count in human format (e.g. 1.2M, 340K)",
+						posted: "string — when it was posted (e.g. 3 days ago, 2 months ago)",
+					}],
+				},
+			},
+		) as { videos: Array<{ title: string; url: string; channel: string; views: string; posted: string }> }
+
+		expect(videos.videos.length).toBeGreaterThan(0)
+		const first = videos.videos[0]
+		expect(typeof first.title).toBe("string")
+		expect(first.title.length).toBeGreaterThan(0)
+		expect(first.url).toContain("youtube.com/watch")
+		expect(first.channel.length).toBeGreaterThan(0)
+
+		console.log(`\n✅ Found ${videos.videos.length} videos`)
+		for (const v of videos.videos.slice(0, 3)) {
+			console.log(`  📹 ${v.title}`)
+			console.log(`     Channel: ${v.channel} | ${v.views} | ${v.posted}`)
+			console.log(`     URL: ${v.url}`)
+		}
+	})
+
+	// ─── Extract: video list → iterate → extract comments ───────────────
+
+	test("extract video list, then extract comments from each video", async ({ page }) => {
+		await page.goto("https://www.youtube.com/results?search_query=Python+for+beginners")
+		await page.waitForLoadState("networkidle")
+
+		// Step 1: extract the top 5 video results
+		const searchResults = await ai(
+			"extract the first 5 video results: title, watch URL, channel, and view count",
+			{
+				page,
+				type: "extract",
+				schema: {
+					videos: [{
+						title: "string",
+						url: "string (full watch URL)",
+						channel: "string",
+						views: "string",
+					}],
+				},
+			},
+		) as { videos: Array<{ title: string; url: string; channel: string; views: string }> }
+
+		expect(searchResults.videos.length).toBeGreaterThan(0)
+		console.log(`\n✅ Found ${searchResults.videos.length} videos`)
+
+		// Step 2: iterate over each video and extract comments (limit to first 2)
+		for (const video of searchResults.videos.slice(0, 2)) {
+			await page.goto(video.url)
+			await page.waitForLoadState("networkidle")
+
+			await ai("scroll down to the comments section", { page })
+
+			const comments = await ai(
+				"extract the top 5 comments: username, comment text, and like count",
+				{
+					page,
+					type: "extract",
+					schema: {
+						comments: [{
+							username: "string — display name of the commenter",
+							text: "string — the comment text",
+							likes: "string — like count as shown (e.g. 42, 1.2K)",
+						}],
+					},
+				},
+			) as { comments: Array<{ username: string; text: string; likes: string }> }
+
+			console.log(`\n📹 ${video.title}`)
+			console.log(`   Channel: ${video.channel} | ${video.views}`)
+			console.log(`   💬 ${comments.comments.length} comments extracted:`)
+			for (const c of comments.comments.slice(0, 3)) {
+				const preview = c.text.length > 80 ? c.text.slice(0, 80) + "…" : c.text
+				console.log(`      @${c.username}: ${preview}`)
+				console.log(`      ❤️  ${c.likes} likes`)
+			}
+		}
+	})
 });
