@@ -6,7 +6,7 @@ import { resolveLLMConfig } from './config'
 import { callLLM } from './llm-client'
 import { resolveSelectorWithRetry, buildSelectorError } from './selector-resolver'
 import { buildVisionContext } from './vision'
-import type { AiOptions, LLMCommand } from './types'
+import type { AiOptions, LLMCommand, DOMSnapshot } from './types'
 import { DEFAULT_CONTEXT_CONFIG } from './types'
 
 // ─── Action executors ────────────────────────────────────────────────────
@@ -139,6 +139,98 @@ async function executeQuery(
   }
 }
 
+function flattenExtractedData(data: unknown): unknown {
+  if (Array.isArray(data)) return data.map(flattenExtractedData)
+  if (data !== null && typeof data === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [key, val] of Object.entries(data as Record<string, unknown>)) {
+      if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
+        out[key] = String(val)
+      } else if (val === null) {
+        out[key] = ''
+      } else {
+        out[key] = flattenExtractedData(val)
+      }
+    }
+    return out
+  }
+  return data
+}
+
+function isUrlField(key: string, schemaValue?: unknown): boolean {
+  const k = key.toLowerCase()
+  if (k === 'url' || k === 'link' || k === 'href' || k === 'src') return true
+  if (typeof schemaValue === 'string') {
+    const v = schemaValue.toLowerCase()
+    if (v.includes('url') || v.includes('http') || v.includes('link') || v.includes('href')) return true
+  }
+  return false
+}
+
+function enrichExtractedUrls(data: unknown, snapshot: DOMSnapshot, schema?: Record<string, unknown>): unknown {
+  if (!data || typeof data !== 'object') return data
+
+  const links = (snapshot.links ?? []).map(l => ({
+    href: l.href,
+    text: (l.label || l.text || '').toLowerCase(),
+  }))
+
+  if (links.length === 0) return data
+
+  const schemaObj = schema ?? {}
+
+  function findUrlForItem(item: Record<string, unknown>): string | null {
+    const titleText = String(item.title || item.name || item.text || '').toLowerCase().trim()
+    if (!titleText) return null
+
+    let bestMatch: { href: string; score: number } | null = null
+    for (const link of links) {
+      if (!link.text) continue
+      const words = titleText.split(/\s+/).filter(w => w.length > 2)
+      const overlap = words.filter(w => link.text.includes(w)).length
+      if (overlap > (bestMatch?.score ?? 0)) {
+        bestMatch = { href: link.href, score: overlap }
+      }
+    }
+    return bestMatch && bestMatch.score >= 2 ? bestMatch.href : null
+  }
+
+  function enrichLeaf(item: Record<string, unknown>, itemSchema: Record<string, unknown>): Record<string, unknown> {
+    const out = { ...item }
+    for (const [key, val] of Object.entries(item)) {
+      const schemaValue = itemSchema[key]
+      if (isUrlField(key, schemaValue) && (!val || val === '')) {
+        const matchUrl = findUrlForItem(out)
+        if (matchUrl) out[key] = matchUrl
+      }
+    }
+    return out
+  }
+
+  function walk(val: unknown, valSchema: Record<string, unknown>): unknown {
+    if (Array.isArray(val)) return val.map(el => walk(el, valSchema))
+    if (val !== null && typeof val === 'object') {
+      const obj = val as Record<string, unknown>
+      const hasArrayChild = Object.values(obj).some(v => Array.isArray(v))
+      if (hasArrayChild) {
+        const out: Record<string, unknown> = {}
+        for (const [k, v] of Object.entries(obj)) {
+          const childSchema = valSchema[k]
+          const innerSchema = Array.isArray(childSchema) && childSchema.length > 0 && typeof childSchema[0] === 'object'
+            ? childSchema[0] as Record<string, unknown>
+            : valSchema
+          out[k] = walk(v, innerSchema)
+        }
+        return out
+      }
+      return enrichLeaf(obj, valSchema)
+    }
+    return val
+  }
+
+  return walk(data, schemaObj)
+}
+
 // ─── ai() main ─────────────────────────────────────────────────────────
 
 export async function ai(
@@ -174,7 +266,9 @@ export async function ai(
       if (command.extractedData === undefined) {
         throw new Error(`ai() extract: no data returned. LLM said: ${command.reasoning}`)
       }
-      return command.extractedData as boolean | string | number
+      const flattened = flattenExtractedData(command.extractedData)
+      const enriched = enrichExtractedUrls(flattened, snapshot, options.schema)
+      return enriched as boolean | string | number
     }
 
     const { locator, attempts } = await resolveSelectorWithRetry(

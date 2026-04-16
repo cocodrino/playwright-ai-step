@@ -1,7 +1,7 @@
 // DOM Serializer — captures Playwright page state as a structured snapshot
 
 import type { Page } from '@playwright/test'
-import type { DOMSnapshot, ElementDescriptor } from './types'
+import type { DOMSnapshot, ElementDescriptor, LinkDescriptor } from './types'
 
 const MAX_TEXT_LENGTH = 200
 
@@ -52,7 +52,7 @@ async function serializePage(page: Page): Promise<DOMSnapshot> {
     const elements: Element[] = []
     walk(document.body, 0, seen, elements)
 
-    return elements.map(el => {
+    const elData = elements.map(el => {
       const computed = window.getComputedStyle(el)
       const visible =
         computed.display !== 'none' &&
@@ -70,7 +70,13 @@ async function serializePage(page: Page): Promise<DOMSnapshot> {
       const rawAttrs: Record<string, string> = {}
       for (let i = 0; i < el.attributes.length; i++) {
         const a = el.attributes[i]
-        rawAttrs[a.name] = a.value
+        if (a.name === 'href' && 'href' in el) {
+          rawAttrs[a.name] = (el as any).href || a.value
+        } else if (a.name === 'src' && 'src' in el) {
+          rawAttrs[a.name] = (el as any).src || a.value
+        } else {
+          rawAttrs[a.name] = a.value
+        }
       }
 
       const box = el.getBoundingClientRect()
@@ -89,9 +95,33 @@ async function serializePage(page: Page): Promise<DOMSnapshot> {
         visible,
       }
     })
+
+    // Extract all links with their absolute URLs and contextual text
+    const allLinks = Array.from(document.querySelectorAll('a[href]'))
+    const linksData: { href: string; text: string; label: string }[] = []
+    for (const a of allLinks) {
+      const href = (a as HTMLAnchorElement).href // Always absolute URL
+      if (!href || href.startsWith('javascript:') || href === '#' || href === location.href) continue
+      const text = (a.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 150)
+      const label = (a.getAttribute('aria-label') ?? a.getAttribute('title') ?? '').trim()
+      // For image-only links, find the nearest heading in the same container
+      let contextText = label || text
+      if (!contextText || contextText.length < 5) {
+        const parent = a.closest('[id], [role="article"], article, section, li, [class*="video"], [class*="item"], [class*="card"], [class*="result"]')
+        if (parent) {
+          const heading = parent.querySelector('h1, h2, h3, h4, h5, h6, [role="heading"]')
+          if (heading) {
+            contextText = (heading.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 150)
+          }
+        }
+      }
+      linksData.push({ href, text: text || contextText || '', label: label || contextText || '' })
+    }
+
+    return { elements: elData, links: linksData }
   })
 
-  const descriptors: ElementDescriptor[] = result
+  const descriptors: ElementDescriptor[] = result.elements
     .filter((el: { box: DOMRect; visible: boolean }) => el.visible && el.box.width >= 2 && el.box.height >= 2)
     .map((el: { tagName: string; role: string; textContent: string; placeholder: string; ariaLabel: string; id: string; className: string; attributes: Record<string, string>; box: DOMRect; visible: boolean }) => {
       const dataTestId =
@@ -116,10 +146,18 @@ async function serializePage(page: Page): Promise<DOMSnapshot> {
       }
     })
 
+  const links: LinkDescriptor[] = result.links
+    .filter((l: { href: string; text: string; label: string }) => l.href && l.href.startsWith('http'))
+    .map((l: { href: string; text: string; label: string }) => ({
+      href: l.href,
+      text: truncate(l.text, MAX_TEXT_LENGTH),
+      label: truncate(l.label, MAX_TEXT_LENGTH),
+    }))
+
   const url = await page.url()
   const title = await page.title()
 
-  return { url, title, elements: descriptors, timestamp: Date.now() }
+  return { url, title, elements: descriptors, links, timestamp: Date.now() }
 }
 
 export { serializePage }

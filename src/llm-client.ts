@@ -14,10 +14,11 @@ Rules:
 - Return a JSON object matching the schema — keys must match exactly
 - String fields: use the exact visible text from the DOM
 - Number fields: extract the numeric value (remove commas, K/M/B suffixes where needed)
-- If a field is not found on the page, use null
-- For URLs: always return the complete watch/share URL (https://www.youtube.com/watch?v=...)
+- If a field is not found on the page, use an empty string "" for string fields — NEVER use null
+- For URL fields: ALWAYS extract the href attribute value from link elements (href="https://..."). Do NOT return null or empty for URLs — use the href value shown in the element list
 - Be thorough — extract ALL matching items, not just the first one
 - Dates/times: preserve the human-readable format from the page
+- Every string field must be a plain string, never an object or array
 
 Schema to follow:
 {SCHEMA}
@@ -25,11 +26,11 @@ Schema to follow:
 Examples:
 Schema: {"videos": [{"title": "string", "url": "string", "channel": "string"}]}
 Instruction: "extract all video results"
--> [{"title":"TypeScript Tutorial 2025","url":"https://www.youtube.com/watch?v=abc123","channel":"Traversy Media"},...]
+-> {"videos":[{"title":"TypeScript Tutorial 2025","url":"https://www.youtube.com/watch?v=abc123","channel":"Traversy Media"}]}
 
 Schema: {"comments": [{"username": "string", "text": "string", "likes": "string"}]}
 Instruction: "extract the top 5 comments"
--> [{"username":"john_doe","text":"Great tutorial!","likes":"42"},...]`
+-> {"comments":[{"username":"john_doe","text":"Great tutorial!","likes":"42"}]}`
 
 // Few-shot examples embedded in system prompt for better accuracy
 const SYSTEM_PROMPT = `You are a Playwright test automation expert.
@@ -96,6 +97,8 @@ function buildUserMessage(
       if (el.tagName) parts.push(`<${el.tagName}>`)
       if (el.id) parts.push(`#${el.id}`)
       if (el.dataTestId) parts.push(`[data-testid="${el.dataTestId}"]`)
+      if (el.attributes?.href) parts.push(`href="${el.attributes.href}"`)
+      if (el.attributes?.src) parts.push(`src="${el.attributes.src}"`)
       if (el.textContent) parts.push(`"${el.textContent}"`)
       if (el.placeholder) parts.push(`placeholder="${el.placeholder}"`)
       if (el.ariaLabel) parts.push(`aria="${el.ariaLabel}"`)
@@ -133,10 +136,21 @@ function buildExtractUserMessage(
       if (el.tagName) parts.push(`<${el.tagName}>`)
       if (el.id) parts.push(`#${el.id}`)
       if (el.dataTestId) parts.push(`[data-testid="${el.dataTestId}"]`)
+      if (el.attributes?.href) parts.push(`href="${el.attributes.href}"`)
+      if (el.attributes?.src) parts.push(`src="${el.attributes.src}"`)
       if (el.textContent) parts.push(`"${el.textContent}"`)
       if (el.placeholder) parts.push(`placeholder="${el.placeholder}"`)
       if (el.ariaLabel) parts.push(`aria="${el.ariaLabel}"`)
       return parts.join(' ')
+    })
+    .join('\n')
+
+  const linksOnPage = (snapshot.links ?? [])
+    .filter(l => l.href && l.href.startsWith('http'))
+    .slice(0, 80)
+    .map(l => {
+      const text = (l.label || l.text || '').slice(0, 80)
+      return `- "${text}" → ${l.href}`
     })
     .join('\n')
 
@@ -147,6 +161,9 @@ Title: ${snapshot.title}
 
 [VISIBLE ELEMENTS] (max 120 shown):
 ${elementList || '(no visible elements)'}${vision}
+
+[LINKS ON THIS PAGE] (use these URLs for extraction):
+${linksOnPage || '(no links found)'}
 
 [EXTRACTION TASK]
 Query: ${instruction}

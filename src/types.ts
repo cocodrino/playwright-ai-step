@@ -49,10 +49,17 @@ export interface ElementDescriptor {
   children: ElementDescriptor[]
 }
 
+export interface LinkDescriptor {
+  href: string
+  text: string
+  label: string
+}
+
 export interface DOMSnapshot {
   url: string
   title: string
   elements: ElementDescriptor[]
+  links: LinkDescriptor[]
   timestamp: number
 }
 
