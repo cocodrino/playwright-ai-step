@@ -21,15 +21,24 @@ test('parseResponse returns fail action for unexpected action type', () => {
 })
 
 test('LLM config returns empty apiKey when no key is set', () => {
-  const original = process.env.LLM_API_KEY
-  delete process.env.LLM_API_KEY
-  delete process.env.OLLAMA_API_KEY
-  delete process.env.MINIMAX_API_KEY
+  // Save originals
+  const original: Record<string, string | undefined> = {}
+  const keys = [
+    'LLM_API_KEY', 'OLLAMA_API_KEY', 'MINIMAX_API_KEY', 'OPENAI_API_KEY',
+    'PAS_LLM_API_KEY', 'PAS_OLLAMA_API_KEY', 'PAS_MINIMAX_API_KEY', 'PAS_OPENAI_API_KEY',
+  ]
+  for (const key of keys) {
+    original[key] = process.env[key]
+    delete (process.env as Record<string, string | undefined>)[key]
+  }
 
   const config = resolveLLMConfig()
   expect(config.apiKey).toBe('')
 
-  if (original) process.env.LLM_API_KEY = original
+  // Restore originals
+  for (const key of keys) {
+    if (original[key] !== undefined) (process.env as Record<string, string | undefined>)[key] = original[key]
+  }
 })
 
 test('buildSelectorError includes all fallback strategies tried', async () => {

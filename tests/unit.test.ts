@@ -13,7 +13,7 @@ const __dirname = dirname(__filename)
 
 function makeMockPage(mockElements: object[]): Page {
   return {
-    evaluate: vi.fn().mockResolvedValue(mockElements),
+    evaluate: vi.fn().mockResolvedValue({ elements: mockElements, links: [] }),
     url: vi.fn().mockReturnValue('https://example.com'),
     title: vi.fn().mockReturnValue('Example'),
   } as unknown as Page

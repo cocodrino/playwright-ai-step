@@ -3,14 +3,25 @@
   "version": "0.1.0",
   "type": "module",
   "description": "AI-powered Playwright testing",
+  "license": "Apache-2.0",
+  "author": "Carlos Laguna",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cocodrino/playwright-ai-step.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cocodrino/playwright-ai-step/issues"
+  },
+  "homepage": "https://github.com/cocodrino/playwright-ai-step#readme",
+  "keywords": ["playwright", "IA", "e2e test"],
   "scripts": {
     "test": "vitest run --dir tests --ignore \"**/integration.test.ts\"",
     "test:watch": "vitest",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run tests/unit.test.ts tests/error-handling.test.ts",
-    "test:integration": "PAS_OLLAMA_API_KEY=YOUR_API_KEY_HERE PAS_LLM_PROVIDER=ollama PAS_OLLAMA_MODEL=gemma4:31b bunx playwright test tests/integration.test.ts",
-    "test:sample": "bunx playwright test sample/",
+    "test:integration": "PAS_LLM_PROVIDER=ollama PAS_LLM_MODEL=gemma4:31b bunx playwright test tests/integration.test.ts",
+    "test:sample": "PAS_LLM_PROVIDER=ollama PAS_LLM_MODEL=gemma4:31b bunx playwright test sample/ --headed",
     "cli": "bun run src/cli.ts",
     "generate": "bun run src/cli.ts generate",
     "sitemap": "bun run src/cli.ts sitemap"
