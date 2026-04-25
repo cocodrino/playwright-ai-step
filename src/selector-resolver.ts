@@ -132,6 +132,65 @@ async function resolveByCSS(page: Page, cmd: LLMCommand, _attempt: number): Prom
   return null
 }
 
+// ─── Keyword fallback ────────────────────────────────────────────────────
+// When the LLM returns empty selectors because the element isn't in the DOM
+// snapshot (e.g. Shadow DOM elements beyond the 200-element limit), we extract
+// quoted or key text from the original instruction and try Playwright's
+// built-in locators which DO pierce Shadow DOM.
+
+function extractKeywords(instruction: string): string[] {
+  // Extract quoted strings first: "Videos", 'filter', etc.
+  const quoted = [...instruction.matchAll(/["']([^"']+)["']/g)].map(m => m[1])
+  if (quoted.length > 0) return quoted
+
+  // Fallback: extract capitalized words and short phrases
+  const words = instruction.split(/[\s,;.!?]+/).filter(w => w.length > 2)
+  if (words.length === 0) return []
+  const significant = words.filter(w => /^[A-Z]/.test(w) || ['filter','tab','button','menu','link','item','chip','card','option','section'].includes(w.toLowerCase()))
+  return significant.length > 0 ? significant : [words[0]]
+}
+
+async function resolveByKeywordFallback(
+  page: Page,
+  _cmd: LLMCommand,
+  instruction: string,
+): Promise<Locator | null> {
+  const keywords = extractKeywords(instruction)
+  if (keywords.length === 0) return null
+
+  for (const keyword of keywords) {
+    // Try getByText — Playwright's text search pierces Shadow DOM
+    try {
+      const byText = page.getByText(keyword, { exact: false })
+      if (await isLocatorUsable(byText)) return byText.first()
+    } catch { /* not found */ }
+
+    // Try getByRole with name — works across Shadow DOM boundaries
+    const roles = ['button', 'tab', 'link', 'option', 'menuitem', 'radio', 'checkbox']
+    for (const role of roles) {
+      try {
+        const byRole = page.getByRole(role as any, { name: keyword, exact: false })
+        if (await isLocatorUsable(byRole)) return byRole.first()
+      } catch { /* not found */ }
+    }
+
+    // Try aria-label match
+    try {
+      const byAria = page.getByLabel(keyword, { exact: false })
+      if (await isLocatorUsable(byAria)) return byAria.first()
+    } catch { /* not found */ }
+
+    // Try CSS :text() pseudo-selector on custom elements (traverses shadow DOM)
+    try {
+      const byCssText = page.locator(`:text("${keyword}")`)
+      const count = await byCssText.count()
+      if (count > 0) return byCssText.first()
+    } catch { /* bad selector */ }
+  }
+
+  return null
+}
+
 const STRATEGIES: SelectorStrategy[] = [
   { name: 'role', maxRetries: 2, fn: resolveByRole },
   { name: 'text', maxRetries: 2, fn: resolveByText },
@@ -219,6 +278,7 @@ export async function resolveSelectorWithRetry(
   page: Page,
   command: LLMCommand,
   verbose = false,
+  context?: { instruction?: string; snapshot?: DOMSnapshot },
 ): Promise<ResolveResult> {
   const attempts: SelectorAttempt[] = []
 
@@ -249,6 +309,26 @@ export async function resolveSelectorWithRetry(
           error: err instanceof Error ? err.message : String(err),
         })
       }
+    }
+  }
+
+  // ── Keyword fallback: when LLM returns empty selectors, extract keywords ──
+  // from the instruction and try Playwright's built-in locators (which pierce
+  // Shadow DOM) to find the element.
+  if (context?.instruction && context?.snapshot) {
+    const hasEmptySelectors = !command.role && !command.text && !command.testId && !command.selector
+    if (hasEmptySelectors) {
+      const keywords = extractKeywords(context.instruction)
+      for (const keyword of keywords) {
+        try {
+          const locator = await resolveByKeywordFallback(page, command, context.instruction)
+          if (locator) {
+            attempts.push({ strategy: 'keyword-fallback', selector: `keyword:"${keyword}"`, success: true })
+            return { locator, attempts }
+          }
+        } catch { /* not found */ }
+      }
+      attempts.push({ strategy: 'keyword-fallback', selector: null, success: false, error: 'no keyword match found' })
     }
   }
 

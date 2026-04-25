@@ -132,8 +132,8 @@ async function executeQuery(
   if (q.extraction === 'title') return page.title()
 
   switch (q.extraction) {
-    case 'text':      return (await locator.textContent()) ?? ''
-    case 'attribute': return (await locator.getAttribute(q.attribute ?? '')) ?? ''
+    case 'text':      return (await locator.first().textContent()) ?? ''
+    case 'attribute': return (await locator.first().getAttribute(q.attribute ?? '')) ?? ''
     case 'count':     return await locator.count()
     default: throw new Error(`Unknown extraction type: ${q.extraction}`)
   }
@@ -274,6 +274,8 @@ export async function ai(
     const { locator, attempts } = await resolveSelectorWithRetry(
       options.page,
       command,
+      false,
+      { instruction: inst, snapshot },
     )
 
     if (!locator) {
