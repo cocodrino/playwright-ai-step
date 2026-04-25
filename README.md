@@ -406,6 +406,16 @@ bun run build
 
 ---
 
+## Community
+
+### Who's using this?
+
+Are you using `playwright-ai-step` in production? We'd love to hear about it!
+
+🌟 **[Let us know by opening an issue](https://github.com/cocodrino/playwright-ai-step/issues/new?template=whos-using-this.md)** — it helps others discover the project and motivates ongoing development. No pressure, just a friendly ask.
+
+---
+
 ## License
 
 [Apache 2.0](LICENSE)
