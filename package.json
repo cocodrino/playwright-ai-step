@@ -1,10 +1,10 @@
 {
   "name": "playwright-ai-step",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "type": "module",
   "description": "AI-powered Playwright testing",
   "license": "Apache-2.0",
-  "author": "Carlos Laguna",
+  "author": "cocodrino",
   "repository": {
     "type": "git",
     "url": "https://github.com/cocodrino/playwright-ai-step.git"
