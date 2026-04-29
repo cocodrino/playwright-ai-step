@@ -1,13 +1,13 @@
 // Core ai() function — DOM capture → LLM → Playwright execution
 
 import type { Page } from '@playwright/test'
-import { serializePage } from './dom-serializer'
-import { resolveLLMConfig } from './config'
-import { callLLM } from './llm-client'
-import { resolveSelectorWithRetry, buildSelectorError } from './selector-resolver'
-import { buildVisionContext } from './vision'
-import type { AiOptions, LLMCommand, DOMSnapshot } from './types'
-import { DEFAULT_CONTEXT_CONFIG } from './types'
+import { serializePage } from './dom-serializer.js'
+import { resolveLLMConfig } from './config.js'
+import { callLLM } from './llm-client.js'
+import { resolveSelectorWithRetry, buildSelectorError } from './selector-resolver.js'
+import { buildVisionContext } from './vision.js'
+import type { AiOptions, LLMCommand, DOMSnapshot } from './types.js'
+import { DEFAULT_CONTEXT_CONFIG } from './types.js'
 
 // ─── Action executors ────────────────────────────────────────────────────
 
@@ -354,5 +354,5 @@ export async function aiNavigate(
 
 // ─── Exports ───────────────────────────────────────────────────────────
 
-export { captureScreenshot, buildVisionContext } from './vision'
-export type { VisionConfig, CapturedScreenshot, VisionPromptParts } from './vision'
+export { captureScreenshot, buildVisionContext } from './vision.js'
+export type { VisionConfig, CapturedScreenshot, VisionPromptParts } from './vision.js'

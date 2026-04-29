@@ -1,7 +1,7 @@
 // Vision module — screenshot capture + visual context for LLM prompts
 
 import type { Page } from '@playwright/test'
-import type { DOMSnapshot } from './types'
+import type { DOMSnapshot } from './types.js'
 
 export interface VisionConfig {
   enabled: boolean

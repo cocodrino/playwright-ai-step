@@ -1,17 +1,17 @@
 // playwright-ai-step — main export
 
-export { ai, aiNavigate } from './ai'
-export { test } from './fixtures'
-export { resolveLLMConfig, loadConfig, checkApiKey } from './config'
-export { AiRecorder, runRecorderCLI } from './recorder'
-export { AiPageObject, LoginPage, FormPage, bindPageObject, createAiPage } from './page-object'
-export { captureScreenshot, buildVisionContext } from './vision'
-export { generateTest } from './test-generator'
-export { aiParallel, aiAssertAll, aiWaitForAll } from './parallel'
-export { parseSitemap, generateSitemapTests, generateSitemapTestsToFile } from './sitemap-generator'
-export { healFailedStep, aiWithHealing } from './healer'
-export type { PageStep, AiNavigateResult } from './ai'
-export type { VisionConfig, CapturedScreenshot, VisionPromptParts } from './vision'
+export { ai, aiNavigate } from './ai.js'
+export { test } from './fixtures.js'
+export { resolveLLMConfig, loadConfig, checkApiKey } from './config.js'
+export { AiRecorder, runRecorderCLI } from './recorder.js'
+export { AiPageObject, LoginPage, FormPage, bindPageObject, createAiPage } from './page-object.js'
+export { captureScreenshot, buildVisionContext } from './vision.js'
+export { generateTest } from './test-generator.js'
+export { aiParallel, aiAssertAll, aiWaitForAll } from './parallel.js'
+export { parseSitemap, generateSitemapTests, generateSitemapTestsToFile } from './sitemap-generator.js'
+export { healFailedStep, aiWithHealing } from './healer.js'
+export type { PageStep, AiNavigateResult } from './ai.js'
+export type { VisionConfig, CapturedScreenshot, VisionPromptParts } from './vision.js'
 export type {
   AiOptions,
   AiConfig,
@@ -21,4 +21,4 @@ export type {
   DOMSnapshot,
   ElementDescriptor,
   InstructionType,
-} from './types'
+} from './types.js'

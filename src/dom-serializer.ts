@@ -1,7 +1,7 @@
 // DOM Serializer — captures Playwright page state as a structured snapshot
 
 import type { Page } from '@playwright/test'
-import type { DOMSnapshot, ElementDescriptor, LinkDescriptor } from './types'
+import type { DOMSnapshot, ElementDescriptor, LinkDescriptor } from './types.js'
 
 const MAX_TEXT_LENGTH = 200
 

@@ -1,7 +1,7 @@
 // Parallel execution — run multiple ai() calls concurrently with a semaphore
 
-import { ai } from './ai'
-import type { AiOptions } from './types'
+import { ai } from './ai.js'
+import type { AiOptions } from './types.js'
 
 export interface ParallelResult {
   instruction: string

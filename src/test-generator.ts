@@ -1,6 +1,6 @@
 // Test Generator — generate Playwright test files from natural language specs
 
-import { resolveLLMConfig } from './config'
+import { resolveLLMConfig } from './config.js'
 
 export interface GenerateTestOptions {
   baseUrl: string

@@ -5,8 +5,8 @@
 //   npx playwright-ai-step sitemap https://example.com/sitemap.xml --type navigation
 //   npx playwright-ai-step heal tests/my-test.ts
 
-import { generateTest } from './test-generator'
-import { generateSitemapTestsToFile } from './sitemap-generator'
+import { generateTest } from './test-generator.js'
+import { generateSitemapTestsToFile } from './sitemap-generator.js'
 
 async function main() {
   const args = process.argv.slice(2)

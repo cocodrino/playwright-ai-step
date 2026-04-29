@@ -1,6 +1,6 @@
 {
   "name": "playwright-ai-step",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "type": "module",
   "description": "AI-powered Playwright testing",
   "license": "Apache-2.0",
@@ -13,7 +13,11 @@
     "url": "https://github.com/cocodrino/playwright-ai-step/issues"
   },
   "homepage": "https://github.com/cocodrino/playwright-ai-step#readme",
-  "keywords": ["playwright", "IA", "e2e test"],
+  "keywords": [
+    "playwright",
+    "IA",
+    "e2e test"
+  ],
   "scripts": {
     "test": "vitest run --dir tests --ignore \"**/integration.test.ts\"",
     "test:watch": "vitest",

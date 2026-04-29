@@ -1,7 +1,7 @@
 // Self-healing — when a test step fails, retry with corrected selector/action
 
-import type { LLMCommand, DOMSnapshot } from './types'
-import { serializePage } from './dom-serializer'
+import type { LLMCommand, DOMSnapshot } from './types.js'
+import { serializePage } from './dom-serializer.js'
 import type { Page } from '@playwright/test'
 
 const HEALER_PROMPT = `You are a Playwright test debugging expert.
@@ -134,10 +134,10 @@ export async function healFailedStep(
 
 export async function aiWithHealing(
   instruction: string,
-  options: Parameters<typeof import('./ai').ai>[1],
+  options: Parameters<typeof import('./ai.js').ai>[1],
   onHeal?: (attempt: number, corrected: LLMCommand) => void,
 ): Promise<boolean | string | number> {
-  const { ai } = await import('./ai')
+  const { ai } = await import('./ai.js')
 
   try {
     return await ai(instruction, options)

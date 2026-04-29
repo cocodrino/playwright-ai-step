@@ -1,7 +1,7 @@
 // Page Object pattern — AI-powered page objects with typed methods
 
 import type { Page } from '@playwright/test'
-import { ai } from './ai'
+import { ai } from './ai.js'
 
 /**
  * AiPageObject — base class for AI-powered page objects.

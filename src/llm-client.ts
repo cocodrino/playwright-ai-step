@@ -1,7 +1,7 @@
 // LLM Client — calls MiniMax (or any OpenAI-compatible endpoint) with DOM context
 
 import OpenAI from 'openai'
-import type { LLMConfig, LLMCommand, DOMSnapshot, InstructionType } from './types'
+import type { LLMConfig, LLMCommand, DOMSnapshot, InstructionType } from './types.js'
 
 
 // ─── Extract mode ───────────────────────────────────────────────────────
@@ -86,7 +86,7 @@ function buildUserMessage(
   instruction: string,
   snapshot: DOMSnapshot,
   type: InstructionType,
-  visionContext?: import('./vision').VisionPromptParts,
+  visionContext?: import('./vision.js').VisionPromptParts,
 ): string {
   const elementList = snapshot.elements
     .filter(el => el.isVisible && (el.textContent || el.placeholder || el.role))
@@ -125,7 +125,7 @@ function buildExtractUserMessage(
   instruction: string,
   snapshot: DOMSnapshot,
   schema: Record<string, unknown>,
-  visionContext?: import('./vision').VisionPromptParts,
+  visionContext?: import('./vision.js').VisionPromptParts,
 ): string {
   const elementList = snapshot.elements
     .filter((el: any) => el.isVisible && (el.textContent || el.placeholder || el.role))
@@ -220,7 +220,7 @@ export async function callLLM(
   snapshot: DOMSnapshot,
   type: InstructionType,
   llmConfig: LLMConfig,
-  visionContext?: import('./vision').VisionPromptParts,
+  visionContext?: import('./vision.js').VisionPromptParts,
   schema?: Record<string, unknown>,
 ): Promise<LLMCommand> {
   const client = new OpenAI({

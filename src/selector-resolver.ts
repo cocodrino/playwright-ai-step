@@ -1,7 +1,7 @@
 // Selector Resolver — 4-strategy fallback chain with retry and self-healing
 
 import type { Page, Locator } from '@playwright/test'
-import type { LLMCommand, DOMSnapshot, ElementDescriptor } from './types'
+import type { LLMCommand, DOMSnapshot, ElementDescriptor } from './types.js'
 
 // ─── Attempt record ────────────────────────────────────────────────────────
 

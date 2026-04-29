@@ -2,13 +2,13 @@
 
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
-import type { AiConfig, LLMConfig, LLMProvider } from './types'
+import type { AiConfig, LLMConfig, LLMProvider } from './types.js'
 import {
   DEFAULT_LLM_CONFIG,
   DEFAULT_SELECTOR_CONFIG,
   DEFAULT_CONTEXT_CONFIG,
   DEFAULT_DEBUG_CONFIG,
-} from './types'
+} from './types.js'
 
 // ─── .env loader ─────────────────────────────────────────────────────────
 
