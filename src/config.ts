@@ -58,9 +58,11 @@ function getEnv(key: string, fallback = ''): string {
   return process.env[key] ?? fallback
 }
 
+const VALID_PROVIDERS = new Set<string>(['minimax', 'ollama', 'openai', 'custom'])
+
 function detectProvider(): LLMProvider {
   const explicit = getEnv('PAS_LLM_PROVIDER')
-  if (explicit) return explicit as LLMProvider
+  if (explicit && VALID_PROVIDERS.has(explicit)) return explicit as LLMProvider
 
   // Auto-detect from baseUrl
   const url = getEnv('PAS_LLM_BASE_URL').toLowerCase()
@@ -73,7 +75,6 @@ function detectProvider(): LLMProvider {
 
 function resolveProviderConfig(provider: LLMProvider): ProviderSpec {
   const pas = (suffix: string) => `PAS_LLM_${suffix}`
-  const pasProvider = (p: string, suffix: string) => `PAS_${p.toUpperCase()}_${suffix}`
 
   const pasApiKey = getEnv(pas('API_KEY'))
   const pasBaseUrl = getEnv(pas('BASE_URL'))
@@ -83,21 +84,21 @@ function resolveProviderConfig(provider: LLMProvider): ProviderSpec {
     case 'ollama':
       return {
         provider: 'ollama',
-        apiKey: getEnv(pasProvider('ollama', 'API_KEY')) || getEnv('PAS_OLLAMA_API_KEY') || pasApiKey || '',
+        apiKey: getEnv('PAS_OLLAMA_API_KEY') || pasApiKey || '',
         baseUrl: getEnv('PAS_OLLAMA_BASE_URL') || getEnv('OLLAMA_BASE_URL') || pasBaseUrl || 'https://ollama.com/v1',
         model: getEnv('PAS_OLLAMA_MODEL') || getEnv('OLLAMA_MODEL') || pasModel || 'gemma4:31b',
       }
     case 'minimax':
       return {
         provider: 'minimax',
-        apiKey: getEnv(pasProvider('minimax', 'API_KEY')) || getEnv('PAS_MINIMAX_API_KEY') || getEnv('MINIMAX_API_KEY') || pasApiKey || '',
+        apiKey: getEnv('PAS_MINIMAX_API_KEY') || getEnv('MINIMAX_API_KEY') || pasApiKey || '',
         baseUrl: getEnv('PAS_MINIMAX_BASE_URL') || getEnv('MINIMAX_BASE_URL') || pasBaseUrl || 'https://api.minimax.io/v1',
         model: getEnv('PAS_MINIMAX_MODEL') || getEnv('MINIMAX_MODEL') || pasModel || 'MiniMax-M2.7',
       }
     case 'openai':
       return {
         provider: 'openai',
-        apiKey: getEnv(pasProvider('openai', 'API_KEY')) || getEnv('PAS_OPENAI_API_KEY') || getEnv('OPENAI_API_KEY') || pasApiKey || '',
+        apiKey: getEnv('PAS_OPENAI_API_KEY') || getEnv('OPENAI_API_KEY') || pasApiKey || '',
         baseUrl: getEnv('PAS_OPENAI_BASE_URL') || getEnv('OPENAI_BASE_URL') || pasBaseUrl || 'https://api.openai.com/v1',
         model: getEnv('PAS_OPENAI_MODEL') || getEnv('OPENAI_MODEL') || pasModel || 'gpt-4o',
       }
@@ -118,6 +119,29 @@ function resolveProviderConfig(provider: LLMProvider): ProviderSpec {
   }
 }
 
+// ─── Safe numeric env var parsing ─────────────────────────────────────────
+// Unlike `parseInt(val) || fallback`, these handle "0" correctly.
+
+function parseEnvInt(keys: string[], fallback: number): number {
+  for (const key of keys) {
+    const val = getEnv(key)
+    if (val === '') continue
+    const n = parseInt(val, 10)
+    if (!isNaN(n)) return n
+  }
+  return fallback
+}
+
+function parseEnvFloat(keys: string[], fallback: number): number {
+  for (const key of keys) {
+    const val = getEnv(key)
+    if (val === '') continue
+    const n = parseFloat(val)
+    if (!isNaN(n)) return n
+  }
+  return fallback
+}
+
 // ─── Public API ────────────────────────────────────────────────────────────
 
 export function resolveLLMConfig(): LLMConfig {
@@ -129,15 +153,17 @@ export function resolveLLMConfig(): LLMConfig {
     apiKey: spec.apiKey,
     baseUrl: spec.baseUrl,
     model: spec.model,
-    maxTokens: parseInt(getEnv('PAS_LLM_MAX_TOKENS') || getEnv('LLM_MAX_TOKENS') || '') || DEFAULT_LLM_CONFIG.maxTokens,
-    temperature: parseFloat(getEnv('PAS_LLM_TEMPERATURE') || getEnv('LLM_TEMPERATURE') || '') || DEFAULT_LLM_CONFIG.temperature,
-    timeoutMs: parseInt(getEnv('PAS_LLM_TIMEOUT_MS') || getEnv('LLM_TIMEOUT_MS') || '') || DEFAULT_LLM_CONFIG.timeoutMs,
+    maxTokens: parseEnvInt(['PAS_LLM_MAX_TOKENS', 'LLM_MAX_TOKENS'], DEFAULT_LLM_CONFIG.maxTokens),
+    temperature: parseEnvFloat(['PAS_LLM_TEMPERATURE', 'LLM_TEMPERATURE'], DEFAULT_LLM_CONFIG.temperature),
+    timeoutMs: parseEnvInt(['PAS_LLM_TIMEOUT_MS', 'LLM_TIMEOUT_MS'], DEFAULT_LLM_CONFIG.timeoutMs),
   }
 }
 
 export function loadConfig(overrides?: Partial<AiConfig>): AiConfig {
+  // Use resolveLLMConfig() so env-var-resolved values are always reflected
+  const llm = resolveLLMConfig()
   return {
-    llm: { ...DEFAULT_LLM_CONFIG, ...overrides?.llm },
+    llm: { ...llm, ...overrides?.llm },
     selectors: { ...DEFAULT_SELECTOR_CONFIG, ...overrides?.selectors },
     context: { ...DEFAULT_CONTEXT_CONFIG, ...overrides?.context },
     debugging: { ...DEFAULT_DEBUG_CONFIG, ...overrides?.debugging },
@@ -148,8 +174,6 @@ export function checkApiKey(): void {
   const config = resolveLLMConfig()
   if (!config.apiKey) {
     console.warn('[playwright-ai-step] WARNING: No API key set. Set PAS_OLLAMA_API_KEY or PAS_MINIMAX_API_KEY in .env')
-  } else {
-    console.log('[playwright-ai-step] LLM: ' + config.provider + ' | ' + config.model + ' | ' + config.baseUrl)
   }
 }
 

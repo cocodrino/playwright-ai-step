@@ -205,7 +205,7 @@ test.describe("YouTube Search", () => {
 		// Step 2: iterate over each video and extract comments (limit to first 2)
 		for (const video of searchResults.videos.slice(0, 2)) {
 			await page.goto(video.url)
-			await page.waitForLoadState("networkidle")
+			await page.waitForLoadState("load")
 
 			await ai("scroll down to the comments section", { page })
 

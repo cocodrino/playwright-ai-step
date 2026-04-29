@@ -38,10 +38,12 @@ export async function captureScreenshot(
       type: cfg.quality === 'high' ? 'png' : 'jpeg',
       quality: cfg.quality === 'low' ? 30 : cfg.quality === 'high' ? undefined : 60,
     })
+    // Use actual viewport dimensions, not the config limits
+    const viewport = page.viewportSize()
     return {
       base64: buffer.toString('base64'),
-      width: cfg.maxWidth,
-      height: cfg.maxHeight,
+      width: viewport?.width ?? cfg.maxWidth,
+      height: viewport?.height ?? cfg.maxHeight,
       timestamp: Date.now(),
     }
   } catch {
@@ -62,8 +64,7 @@ export interface VisualElement {
   visible: boolean
 }
 
-export function describeVisualPage(snapshot: DOMSnapshot): string {
-  const viewport = { width: 1280, height: 720 } // default, overridden below
+export function describeVisualPage(snapshot: DOMSnapshot, viewport = { width: 1280, height: 720 }): string {
 
   const elements: VisualElement[] = snapshot.elements
     .filter(el => el.isVisible && (el.textContent || el.placeholder || el.role !== 'paragraph'))
@@ -111,7 +112,9 @@ export async function buildVisionContext(
   includeScreenshot: boolean,
 ): Promise<VisionPromptParts> {
   const screenshot = includeScreenshot ? await captureScreenshot(page, { enabled: true }) : null
-  const visualContext = describeVisualPage(snapshot)
+  // Only compute visual layout when screenshots are enabled — saves tokens otherwise
+  const viewport = page.viewportSize() ?? undefined
+  const visualContext = includeScreenshot ? describeVisualPage(snapshot, viewport) : ''
 
   return {
     visualContext,

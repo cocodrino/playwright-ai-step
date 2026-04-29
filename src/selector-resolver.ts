@@ -15,8 +15,8 @@ export interface SelectorAttempt {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 async function isLocatorUsable(locator: Locator): Promise<boolean> {
-  // Check visibility with a reasonable timeout for elements that may still be loading
-  if (await locator.isVisible({ timeout: 3000 }).catch(() => false)) return true
+  // Short timeout for strategy probing — we want current state, not a wait
+  if (await locator.isVisible({ timeout: 200 }).catch(() => false)) return true
 
   // For custom elements / shadow DOM, isVisible() can be unreliable.
   // Fall back to checking if the element exists and has dimensions.
@@ -77,11 +77,20 @@ async function resolveByRole(page: Page, cmd: LLMCommand, _attempt: number): Pro
 
   try {
     if (name) {
-      const locator = page.getByRole(role as Parameters<typeof page.getByRole>[0], { name, exact: false })
-      if (await canUseLocatorForCommand(locator, cmd)) return locator
+      // Exact match first — deterministic, avoids matching wrong elements
+      const exactLocator = page.getByRole(role as Parameters<typeof page.getByRole>[0], { name, exact: true })
+      if (await canUseLocatorForCommand(exactLocator, cmd)) return exactLocator
+
+      // Fuzzy fallback only if exact found nothing
+      const fuzzyLocator = page.getByRole(role as Parameters<typeof page.getByRole>[0], { name, exact: false })
+      if (await canUseLocatorForCommand(fuzzyLocator, cmd)) return fuzzyLocator
+
+      // Name was specified but neither match worked — don't fall through to
+      // role-only, which would silently return an unrelated element
+      return null
     }
 
-    // Try role alone (no name constraint) when no text given
+    // Role alone only when no name was ever expected
     const locator = page.getByRole(role as Parameters<typeof page.getByRole>[0])
     if (await canUseLocatorForCommand(locator, cmd)) return locator
   } catch { /* not found */ }
@@ -113,8 +122,13 @@ async function resolveByText(page: Page, cmd: LLMCommand, _attempt: number): Pro
   if (!text) return null
 
   try {
-    const locator = page.getByText(text, { exact: false })
-    if (await canUseLocatorForCommand(locator, cmd)) return locator
+    // Exact match first — avoids matching paragraphs/headings that contain the text
+    const exactLocator = page.getByText(text, { exact: true })
+    if (await canUseLocatorForCommand(exactLocator, cmd)) return exactLocator
+
+    // Fuzzy fallback for partial labels / LLM paraphrasing
+    const fuzzyLocator = page.getByText(text, { exact: false })
+    if (await canUseLocatorForCommand(fuzzyLocator, cmd)) return fuzzyLocator
   } catch { /* not found */ }
   return null
 }
@@ -247,7 +261,7 @@ function buildDiagnosticContext(
 
   return (
     `  Action: ${cmd.action}\n` +
-    `  LLM reasoning: ${cmd.reasoning ?? cmd.reasoning}\n` +
+    `  LLM reasoning: ${cmd.reasoning ?? ''}\n` +
     `  LLM confidence: ${cmd.confidence}\n` +
     `  Strategy history:\n${strategyHistory}\n` +
     `  Closest DOM element: ${closest ?? 'none found'}\n` +
@@ -340,12 +354,15 @@ export interface ResolveResult {
   attempts: SelectorAttempt[]
 }
 
+const DEBUG = process.env.PAS_DEBUG === '1'
+
 export async function resolveSelectorWithRetry(
   page: Page,
   command: LLMCommand,
   verbose = false,
   context?: { instruction?: string; snapshot?: DOMSnapshot },
 ): Promise<ResolveResult> {
+  const log = verbose || DEBUG
   const attempts: SelectorAttempt[] = []
 
   // For 'query' with extraction='title', no DOM selector needed
@@ -353,28 +370,27 @@ export async function resolveSelectorWithRetry(
     return { locator: page.locator('body'), attempts: [] }
   }
 
+  if (log) console.log(`[pas:selector] resolving "${context?.instruction ?? command.text}" — action:${command.action} role:${command.role ?? '-'} text:${command.text ?? '-'}`)
+
   for (const strategy of STRATEGIES) {
-    for (let retry = 0; retry < strategy.maxRetries; retry++) {
-      const selectorDesc = buildSelectorDesc(command, strategy.name, retry)
+    const selectorDesc = buildSelectorDesc(command, strategy.name, 0)
 
-      try {
-        if (verbose) console.log(`[selector-resolver] Trying ${strategy.name} (retry ${retry})`)
-        const locator = await strategy.fn(page, command, retry)
+    try {
+      if (log) console.log(`[pas:selector]   trying ${strategy.name}: ${selectorDesc}`)
+      const locator = await strategy.fn(page, command, 0)
 
-        if (locator && await isLocatorUsable(locator)) {
-          attempts.push({ strategy: strategy.name, selector: selectorDesc, success: true })
-          return { locator, attempts }
-        }
-
-        attempts.push({ strategy: strategy.name, selector: selectorDesc, success: false, error: 'not visible or not found' })
-      } catch (err) {
-        attempts.push({
-          strategy: strategy.name,
-          selector: selectorDesc,
-          success: false,
-          error: err instanceof Error ? err.message : String(err),
-        })
+      if (locator && await isLocatorUsable(locator)) {
+        if (log) console.log(`[pas:selector]   ✓ ${strategy.name} matched`)
+        attempts.push({ strategy: strategy.name, selector: selectorDesc, success: true })
+        return { locator, attempts }
       }
+
+      if (log) console.log(`[pas:selector]   ✗ ${strategy.name} — not visible or not found`)
+      attempts.push({ strategy: strategy.name, selector: selectorDesc, success: false, error: 'not visible or not found' })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (log) console.log(`[pas:selector]   ✗ ${strategy.name} — ${msg}`)
+      attempts.push({ strategy: strategy.name, selector: selectorDesc, success: false, error: msg })
     }
   }
 
@@ -382,18 +398,19 @@ export async function resolveSelectorWithRetry(
   // from the instruction and try Playwright's built-in locators (which pierce
   // Shadow DOM) to find the element.
   if (context?.instruction && context?.snapshot) {
-  const hasEmptySelectors = !command.role && !command.text && !command.name && !command.testId && !command.selector
+    const hasEmptySelectors = !command.role && !command.text && !command.name && !command.testId && !command.selector
     if (hasEmptySelectors) {
-      const keywords = extractKeywords(context.instruction)
-      for (const keyword of keywords) {
-        try {
-          const locator = await resolveByKeywordFallback(page, command, context.instruction)
-          if (locator) {
-            attempts.push({ strategy: 'keyword-fallback', selector: `keyword:"${keyword}"`, success: true })
-            return { locator, attempts }
-          }
-        } catch { /* not found */ }
-      }
+      if (log) console.log(`[pas:selector]   trying keyword-fallback for: "${context.instruction}"`)
+      try {
+        // Call once — resolveByKeywordFallback handles its own keyword iteration internally
+        const locator = await resolveByKeywordFallback(page, command, context.instruction)
+        if (locator) {
+          if (log) console.log(`[pas:selector]   ✓ keyword-fallback matched`)
+          attempts.push({ strategy: 'keyword-fallback', selector: 'keyword', success: true })
+          return { locator, attempts }
+        }
+      } catch { /* not found */ }
+      if (log) console.log(`[pas:selector]   ✗ keyword-fallback — no match`)
       attempts.push({ strategy: 'keyword-fallback', selector: null, success: false, error: 'no keyword match found' })
     }
   }

@@ -53,12 +53,14 @@ export class AiPageObject {
 // ─── Helper: create a bound page object ─────────────────────────────────
 
 export function bindPageObject<T extends AiPageObject>(
-  cls: new (page: Page, options?: { baseUrl?: string }) => T,
+  cls: new (page: Page, options?: { baseUrl?: string; selectorPrefix?: string }) => T,
   page: Page,
-  options?: { baseUrl?: string },
+  options?: { baseUrl?: string; selectorPrefix?: string },
 ): T {
   return new cls(page, options)
 }
+
+export type AiPage = ReturnType<typeof createAiPage>
 
 // ─── Example: LoginPage ─────────────────────────────────────────────────
 

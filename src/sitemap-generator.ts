@@ -154,6 +154,11 @@ export async function generateSitemapTests(
   options: GenerateSitemapTestsOptions,
 ): Promise<string> {
   const urls = await parseSitemap(sitemapUrl)
+
+  if (urls.length > 50) {
+    console.warn(`[playwright-ai-step] Sitemap has ${urls.length} URLs — capped at 50. Pass a filtered subset if needed.`)
+  }
+
   const testType = options.testType
   const baseUrl = options.baseUrl
 
@@ -210,6 +215,8 @@ export async function generateSitemapTestsToFile(
   const { writeFileSync } = await import('fs')
   const outputPath = options.outputPath ?? `tests/sitemap-${options.testType}-${Date.now()}.test.ts`
   writeFileSync(outputPath, content)
-  const urls = await parseSitemap(sitemapUrl)
-  return { filePath: outputPath, urlCount: Math.min(urls.length, 50) }
+  // Extract count from the comment already present in generated content — avoids a second network request
+  const match = content.match(/\/\/ Total URLs: \d+, shown: (\d+)/)
+  const urlCount = match ? parseInt(match[1], 10) : 0
+  return { filePath: outputPath, urlCount }
 }

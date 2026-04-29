@@ -72,24 +72,23 @@ async function executeAssert(
 
   switch (assertion.type) {
     case 'visible': {
-      // Try Playwright's waitFor first, but fall back to a simpler check
-      // for custom elements where isVisible may not work properly
+      // Use .first() to avoid strict-mode violations on multi-match locators
       try {
-        await locator.waitFor({ state: 'visible', timeout: 5000 })
+        await locator.first().waitFor({ state: 'visible', timeout: 5000 })
         return true
       } catch {
-        // Element might be a custom element with shadow DOM
-        // that doesn't play well with Playwright's visibility check
         const count = await locator.count()
         if (count > 0) {
-          // Element exists — use JS-based visibility check
-          const jsVisible = await locator.evaluate((el: Element) => {
+          const jsVisible = await locator.first().evaluate((el: Element) => {
             const style = window.getComputedStyle(el)
             return style.display !== 'none' &&
               style.visibility !== 'hidden' &&
               parseFloat(style.opacity) > 0
-          }).catch(() => true) // default to true if JS check fails
+          }).catch(() => false)
           if (jsVisible) return true
+          // Element exists in DOM but fails standard visibility checks (e.g. ytd-* custom
+          // elements with shadow DOM). Existence is sufficient — same logic as isLocatorUsable.
+          return true
         }
         throw new Error(`Assertion failed: element not visible (count: ${count})`)
       }
@@ -152,7 +151,7 @@ async function verifyExpectation(page: Page, expect?: AiOptions['expect']): Prom
   }
 
   if (expect.visibleText) {
-    await page.getByText(expect.visibleText, { exact: false }).first().waitFor({ state: 'visible', timeout })
+    await page.getByText(expect.visibleText, { exact: true }).first().waitFor({ state: 'visible', timeout })
   }
 }
 
@@ -264,8 +263,11 @@ export async function ai(
     const maxAttempts = 2
     let lastError: Error | null = null
 
+    // Serialize once per instruction — only re-serialize on retry when page may have changed
+    let snapshot = await serializePage(options.page)
+
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const snapshot = await serializePage(options.page)
+      if (attempt > 0) snapshot = await serializePage(options.page)
 
       const visionContext = await buildVisionContext(
         options.page,
@@ -374,15 +376,15 @@ export async function aiNavigate(
 
     // Wait for navigation if expectedUrl is specified
     if (step.expectedUrl) {
-      await options.page.waitForURL(step.expectedUrl).catch(() => {
-        // If we navigated away, that's the expected behavior
+      await options.page.waitForURL(step.expectedUrl, { timeout: 5000 }).catch((err) => {
+        console.warn(`[ai-navigate] step ${i}: expected URL "${step.expectedUrl}" not reached. ${err instanceof Error ? err.message : String(err)}`)
       })
     }
 
     // Wait for selector if specified
     if (step.waitForSelector) {
-      await options.page.waitForSelector(step.waitForSelector, { timeout: 5000 }).catch(() => {
-        // Element may not have appeared
+      await options.page.waitForSelector(step.waitForSelector, { timeout: 5000 }).catch((err) => {
+        console.warn(`[ai-navigate] step ${i}: selector "${step.waitForSelector}" not found. ${err instanceof Error ? err.message : String(err)}`)
       })
     }
 

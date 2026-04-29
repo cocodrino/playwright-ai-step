@@ -93,23 +93,10 @@ function buildUserMessage(
   const elementList = snapshot.elements
     .filter(el => el.isVisible && (el.textContent || el.placeholder || el.role))
     .slice(0, 80)
-    .map(el => {
-      const parts: string[] = []
-      if (el.role && el.role !== el.tagName) parts.push(`[${el.role}]`)
-      if (el.tagName) parts.push(`<${el.tagName}>`)
-      if (el.id) parts.push(`#${el.id}`)
-      if (el.dataTestId) parts.push(`[data-testid="${el.dataTestId}"]`)
-      if (el.attributes?.href) parts.push(`href="${el.attributes.href}"`)
-      if (el.attributes?.src) parts.push(`src="${el.attributes.src}"`)
-      if (el.textContent) parts.push(`"${el.textContent}"`)
-      if (el.placeholder) parts.push(`placeholder="${el.placeholder}"`)
-      if (el.attributes?.name) parts.push(`name="${el.attributes.name}"`)
-      if (el.ariaLabel) parts.push(`aria="${el.ariaLabel}"`)
-      return parts.join(' ')
-    })
+    .map(el => formatElement(el))
     .join('\n')
 
-  const vision = visionContext
+  const vision = visionContext?.visualContext
     ? `\n\n${visionContext.visualContext}\n${visionContext.screenshotAvailable ? '[Screenshot captured — available for vision]' : ''}`
     : ''
 
@@ -131,22 +118,9 @@ function buildExtractUserMessage(
   visionContext?: import('./vision.js').VisionPromptParts,
 ): string {
   const elementList = snapshot.elements
-    .filter((el: any) => el.isVisible && (el.textContent || el.placeholder || el.role))
+    .filter(el => el.isVisible && (el.textContent || el.placeholder || el.role))
     .slice(0, 120)
-    .map((el: any) => {
-      const parts: string[] = []
-      if (el.role && el.role !== el.tagName) parts.push(`[${el.role}]`)
-      if (el.tagName) parts.push(`<${el.tagName}>`)
-      if (el.id) parts.push(`#${el.id}`)
-      if (el.dataTestId) parts.push(`[data-testid="${el.dataTestId}"]`)
-      if (el.attributes?.href) parts.push(`href="${el.attributes.href}"`)
-      if (el.attributes?.src) parts.push(`src="${el.attributes.src}"`)
-      if (el.textContent) parts.push(`"${el.textContent}"`)
-      if (el.placeholder) parts.push(`placeholder="${el.placeholder}"`)
-      if (el.attributes?.name) parts.push(`name="${el.attributes.name}"`)
-      if (el.ariaLabel) parts.push(`aria="${el.ariaLabel}"`)
-      return parts.join(' ')
-    })
+    .map(el => formatElement(el))
     .join('\n')
 
   const linksOnPage = (snapshot.links ?? [])
@@ -158,7 +132,7 @@ function buildExtractUserMessage(
     })
     .join('\n')
 
-  const vision = visionContext ? `\n\n${visionContext.visualContext}\n[Screenshot available for vision]` : ''
+  const vision = visionContext?.visualContext ? `\n\n${visionContext.visualContext}\n[Screenshot available for vision]` : ''
 
   return `URL: ${snapshot.url}
 Title: ${snapshot.title}
@@ -178,6 +152,24 @@ ${JSON.stringify(schema, null, 2)}
 Return ONLY valid JSON. Nothing else:`
 }
 
+// ─── Shared element formatter ────────────────────────────────────────────
+// Single source of truth used by buildUserMessage and buildExtractUserMessage.
+
+function formatElement(el: import('./types.js').ElementDescriptor): string {
+  const parts: string[] = []
+  if (el.role && el.role !== el.tagName) parts.push(`[${el.role}]`)
+  if (el.tagName) parts.push(`<${el.tagName}>`)
+  if (el.id) parts.push(`#${el.id}`)
+  if (el.dataTestId) parts.push(`[data-testid="${el.dataTestId}"]`)
+  if (el.attributes?.href) parts.push(`href="${el.attributes.href}"`)
+  if (el.attributes?.src) parts.push(`src="${el.attributes.src}"`)
+  if (el.textContent) parts.push(`"${el.textContent}"`)
+  if (el.placeholder) parts.push(`placeholder="${el.placeholder}"`)
+  if (el.attributes?.name) parts.push(`name="${el.attributes.name}"`)
+  if (el.ariaLabel) parts.push(`aria="${el.ariaLabel}"`)
+  return parts.join(' ')
+}
+
 export function parseResponse(raw: string): LLMCommand {
   let jsonStr = raw.trim()
   if (jsonStr.startsWith('```')) {
@@ -192,8 +184,9 @@ export function parseResponse(raw: string): LLMCommand {
     const obj = JSON.parse(jsonStr)
     const validActions = ['click', 'type', 'hover', 'select', 'scroll', 'wait', 'assert', 'query', 'fail']
     if (!validActions.includes(obj.action ?? '')) {
+      const originalAction = obj.action  // capture before overwrite
       obj.action = 'fail'
-      obj.reason = `Invalid action: ${obj.action}`
+      obj.reason = `Invalid action: ${originalAction}`
     }
 
     return {

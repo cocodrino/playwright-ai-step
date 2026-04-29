@@ -89,8 +89,10 @@ export async function generateTest(
     `// Generated: ${new Date().toISOString()}`,
     '',
     "import { test, expect } from '@playwright/test'",
+    "import { ai } from 'playwright-ai-step'",
     '',
     `test('${escapeString(testName)}', async ({ page }) => {`,
+    `  await page.goto('${escapeString(options.baseUrl)}')`,
   ]
 
   if (includeComments) {
@@ -100,17 +102,18 @@ export async function generateTest(
   for (let i = 0; i < parsedSteps.length; i++) {
     const step = parsedSteps[i]
     const instruction = escapeString(step.instruction ?? `step ${i + 1}`)
+    const type = step.type ?? 'action'
 
-    if (step.type === 'assert') {
-      lines.push(`  // assert: ${instruction}`)
-      lines.push(`  await expect(page).toHaveTitle(/.+/)  // verify page has title`)
-    } else if (step.type === 'query') {
-      lines.push(`  // query: ${instruction}`)
-      lines.push(`  const _result = await page.title()  // placeholder for query`)
+    if (step.expectedUrl && includeComments) {
+      lines.push(`  // expected URL: ${escapeString(step.expectedUrl)}`)
+    }
+
+    if (type === 'assert') {
+      lines.push(`  expect(await ai("${instruction}", { page, type: 'assert' })).toBe(true)`)
+    } else if (type === 'query') {
+      lines.push(`  const result${i + 1} = await ai("${instruction}", { page, type: 'query' })`)
     } else {
-      lines.push(`  // ${instruction}`)
-      lines.push(`  await page.goto('${options.baseUrl}')`)
-      lines.push(`  await page.waitForTimeout(1000)`)
+      lines.push(`  await ai("${instruction}", { page })`)
     }
   }
 

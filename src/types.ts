@@ -133,16 +133,18 @@ export interface AiOptions {
 // ─── Fixture types ─────────────────────────────────────────────────────
 
 export interface AiFixture {
-  ai: (instruction: string | string[], options?: Partial<AiOptions>) => Promise<boolean | string | number>
+  ai: (instruction: string | string[], options?: Partial<AiOptions>) => ReturnType<typeof import('./ai.js').ai>
 }
 
 // ─── Default config ────────────────────────────────────────────────────
+// Static constants only — no process.env reads at module load time.
+// Runtime config is resolved by resolveLLMConfig() in config.ts.
 
 export const DEFAULT_LLM_CONFIG: LLMConfig = {
-  provider: 'minimax',
-  apiKey: process.env.LLM_API_KEY ?? '',
-  baseUrl: process.env.LLM_BASE_URL ?? 'https://api.minimax.io/v1',
-  model: process.env.LLM_MODEL ?? 'MiniMax-M2.7',
+  provider: 'ollama',
+  apiKey: '',
+  baseUrl: 'https://ollama.com/v1',
+  model: 'gemma4:31b',
   maxTokens: 512,
   temperature: 0.1,
   timeoutMs: 30_000,
@@ -155,7 +157,7 @@ export const DEFAULT_SELECTOR_CONFIG: SelectorConfig = {
 }
 
 export const DEFAULT_CONTEXT_CONFIG: ContextConfig = {
-  includeScreenshot: false, // Phase 1: DOM only, no vision
+  includeScreenshot: false,
   screenshotQuality: 'medium',
   maxDomDepth: 10,
   maxElements: 100,

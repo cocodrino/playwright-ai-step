@@ -5,6 +5,7 @@ export { test } from './fixtures.js'
 export { resolveLLMConfig, loadConfig, checkApiKey } from './config.js'
 export { AiRecorder, runRecorderCLI } from './recorder.js'
 export { AiPageObject, LoginPage, FormPage, bindPageObject, createAiPage } from './page-object.js'
+export type { AiPage } from './page-object.js'
 export { captureScreenshot, buildVisionContext } from './vision.js'
 export { generateTest } from './test-generator.js'
 export { aiParallel, aiAssertAll, aiWaitForAll } from './parallel.js'
@@ -18,6 +19,7 @@ export type {
   AiFixture,
   LLMCommand,
   LLMConfig,
+  LLMProvider,
   DOMSnapshot,
   ElementDescriptor,
   InstructionType,

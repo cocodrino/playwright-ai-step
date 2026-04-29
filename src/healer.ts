@@ -2,6 +2,7 @@
 
 import type { LLMCommand, DOMSnapshot } from './types.js'
 import { serializePage } from './dom-serializer.js'
+import { resolveLLMConfig } from './config.js'
 import type { Page } from '@playwright/test'
 
 const HEALER_PROMPT = `You are a Playwright test debugging expert.
@@ -53,6 +54,7 @@ function buildHealerPrompt(
       if (el.dataTestId) parts.push(`[data-testid="${el.dataTestId}"]`)
       if (el.textContent) parts.push(`"${el.textContent}"`)
       if (el.placeholder) parts.push(`placeholder="${el.placeholder}"`)
+      if (el.ariaLabel) parts.push(`aria="${el.ariaLabel}"`)
       return parts.join(' ')
     })
     .join('\n')
@@ -67,6 +69,14 @@ function buildHealerPrompt(
     .replace('{domElements}', elementList || '(no visible elements)')
 }
 
+function guessActionFromError(errorMessage: string): LLMCommand['action'] {
+  const msg = errorMessage.toLowerCase()
+  if (msg.includes('type') || msg.includes('fill') || msg.includes('input')) return 'type'
+  if (msg.includes('select')) return 'select'
+  if (msg.includes('hover')) return 'hover'
+  return 'click'
+}
+
 export interface HealResult {
   success: boolean
   correctedCommand?: LLMCommand
@@ -79,23 +89,22 @@ export async function healFailedStep(
   errorMessage: string,
   page: Page,
   maxAttempts = 2,
+  existingSnapshot?: DOMSnapshot,
 ): Promise<HealResult> {
   const { default: OpenAI } = await import('openai')
 
-  // Resolve config from env
-  const apiKey = process.env.LLM_API_KEY ?? process.env.OLLAMA_API_KEY ?? process.env.MINIMAX_API_KEY ?? ''
-  const baseUrl = process.env.LLM_BASE_URL ?? process.env.OLLAMA_BASE_URL ?? process.env.MINIMAX_BASE_URL ?? 'https://api.ollama.com/v1'
-  const model = process.env.LLM_MODEL ?? process.env.OLLAMA_MODEL ?? process.env.MINIMAX_MODEL ?? 'gemma4:31b'
-
-  const client = new OpenAI({ apiKey, baseURL: baseUrl, timeout: 30_000 })
+  // Use the same config as the rest of the system — not raw process.env reads
+  const config = resolveLLMConfig()
+  const client = new OpenAI({ apiKey: config.apiKey, baseURL: config.baseUrl, timeout: config.timeoutMs })
 
   for (let attempt = 0; attempt <= maxAttempts; attempt++) {
-    const snapshot = await serializePage(page)
+    // Reuse provided snapshot to avoid an extra page.evaluate() round-trip
+    const snapshot = existingSnapshot ?? await serializePage(page)
     const prompt = buildHealerPrompt(instruction, failedCommand, errorMessage, snapshot)
 
     try {
       const response = await client.chat.completions.create({
-        model,
+        model: config.model,
         messages: [
           { role: 'system', content: 'You are a Playwright test debugging expert. Return ONLY valid JSON.' },
           { role: 'user', content: prompt },
@@ -142,16 +151,19 @@ export async function aiWithHealing(
   try {
     return await ai(instruction, options)
   } catch (normalError) {
+    const errorMessage = normalError instanceof Error ? normalError.message : String(normalError)
+
+    // Best-effort: infer action from error text; healer sees the full DOM + instruction
     const failedCommand: LLMCommand = {
-      action: 'click',
-      reasoning: 'Original attempt failed',
+      action: guessActionFromError(errorMessage),
+      reasoning: errorMessage,
       confidence: 0,
     }
 
     const result = await healFailedStep(
       instruction,
       failedCommand,
-      normalError instanceof Error ? normalError.message : String(normalError),
+      errorMessage,
       options.page,
       2,
     )

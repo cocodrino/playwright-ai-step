@@ -19,20 +19,27 @@ export class AiRecorder {
   private steps: RecordedStep[] = []
   private startTime = 0
   private startUrl = ''
+  private frameNavigatedHandler: (() => void) | null = null
+  private boundPage: Page | null = null
 
   /**
-   * Start recording actions on a Playwright page.
-   * Attaches listeners to capture page events (clicks, navigation, etc.)
+   * Start a new recording session on the given page.
+   * Call addStep() manually to record each action.
+   * Resets any previously attached listeners before attaching new ones.
    */
   start(page: Page): void {
+    // Remove listener from a previous session to prevent accumulation
+    if (this.boundPage && this.frameNavigatedHandler) {
+      this.boundPage.off('framenavigated', this.frameNavigatedHandler)
+    }
+
     this.steps = []
     this.startTime = Date.now()
-    this.startUrl = page.url()
+    this.startUrl = page.url() || ''
+    this.boundPage = page
 
-    // Reset on navigation
-    page.on('framenavigated', () => {
-      this.steps = []
-    })
+    this.frameNavigatedHandler = () => { this.steps = [] }
+    page.on('framenavigated', this.frameNavigatedHandler)
   }
 
   /**
@@ -105,7 +112,7 @@ export async function runRecorderCLI(url: string, options: RecorderOptions = {})
   await page.goto(url)
 
   await new Promise<void>((resolve) => {
-    process.on('SIGINT', () => {
+    process.once('SIGINT', () => {
       console.log('\n⏹  Stopping...')
       resolve()
     })

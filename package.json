@@ -1,6 +1,6 @@
 {
   "name": "playwright-ai-step",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "type": "module",
   "description": "AI-powered Playwright testing",
   "license": "Apache-2.0",
@@ -25,7 +25,7 @@
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run tests/unit.test.ts tests/error-handling.test.ts",
     "test:integration": "PAS_LLM_PROVIDER=ollama PAS_LLM_MODEL=gemma4:31b bunx playwright test tests/integration.test.ts",
-    "test:sample": "PAS_LLM_PROVIDER=ollama PAS_LLM_MODEL=gemma4:31b bunx playwright test sample/ --headed",
+    "test:sample": "PAS_DEBUG=1 PAS_LLM_PROVIDER=ollama PAS_LLM_MODEL=gemma4:31b bunx playwright test sample/ --headed",
     "cli": "bun run src/cli.ts",
     "generate": "bun run src/cli.ts generate",
     "sitemap": "bun run src/cli.ts sitemap"

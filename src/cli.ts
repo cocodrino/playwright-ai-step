@@ -68,8 +68,9 @@ Examples:
     }
 
     else if (command === '--version' || command === '-v') {
-      const pkg = await import('../package.json').catch(() => ({ version: '0.1.0' }))
-      console.log(`playwright-ai-step v${pkg}`)
+      const pkg = await import('../package.json').catch(() => null)
+      const version = (pkg as any)?.default?.version ?? (pkg as any)?.version ?? '(unknown)'
+      console.log(`playwright-ai-step v${version}`)
     }
 
     else {
