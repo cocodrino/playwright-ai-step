@@ -45,6 +45,7 @@ JSON schema:
   "value": "<text or empty>",
   "role": "<aria role>",
   "text": "<visible text or empty>",
+  "name": "<form field name attribute or empty>",
   "testId": "<data-testid value or empty>",
   "assertion": { "type": "visible" | "text" | "count" | "attribute", "expected": "...", "attribute": "..." },
   "query": { "extraction": "text" | "attribute" | "count" | "title", "attribute": "<attr name if needed>", "selector": "<element selector if needed>" },
@@ -54,7 +55,8 @@ JSON schema:
 
 Rules:
 - CLICK: prefer page.getByRole(role, {name:"text"}) when element has visible text — DO NOT use CSS selectors first
-- TYPE: must include both selector AND value
+- TYPE: must include value and at least one target among (name | role+text | testId | selector)
+- TYPE: when a form field has a name attribute in DOM (e.g. name="phoneNumber"), include it in "name"
 - SELECT: include selector + value (option text or value attribute)
 - HOVER/SCROLL/WAIT: include selector for the target element
 - ASSERT: include assertion object {type, expected}. Prefer 'visible' for UI checks.
@@ -101,6 +103,7 @@ function buildUserMessage(
       if (el.attributes?.src) parts.push(`src="${el.attributes.src}"`)
       if (el.textContent) parts.push(`"${el.textContent}"`)
       if (el.placeholder) parts.push(`placeholder="${el.placeholder}"`)
+      if (el.attributes?.name) parts.push(`name="${el.attributes.name}"`)
       if (el.ariaLabel) parts.push(`aria="${el.ariaLabel}"`)
       return parts.join(' ')
     })
@@ -140,6 +143,7 @@ function buildExtractUserMessage(
       if (el.attributes?.src) parts.push(`src="${el.attributes.src}"`)
       if (el.textContent) parts.push(`"${el.textContent}"`)
       if (el.placeholder) parts.push(`placeholder="${el.placeholder}"`)
+      if (el.attributes?.name) parts.push(`name="${el.attributes.name}"`)
       if (el.ariaLabel) parts.push(`aria="${el.ariaLabel}"`)
       return parts.join(' ')
     })
@@ -198,6 +202,7 @@ export function parseResponse(raw: string): LLMCommand {
       value: obj.value ?? undefined,
       role: obj.role ?? undefined,
       text: obj.text ?? undefined,
+      name: obj.name ?? undefined,
       testId: obj.testId ?? undefined,
       assertion: obj.assertion ?? undefined,
       query: obj.query ?? undefined,

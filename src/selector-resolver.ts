@@ -47,6 +47,19 @@ async function isLocatorUsable(locator: Locator): Promise<boolean> {
 
   return false
 }
+
+async function canUseLocatorForCommand(locator: Locator, cmd: LLMCommand): Promise<boolean> {
+  if (!(await isLocatorUsable(locator))) return false
+  if (cmd.action === 'type' || cmd.action === 'select') {
+    const count = await locator.count().catch(() => 0)
+    return count === 1
+  }
+  return true
+}
+
+function cssAttrValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
 // ─── Strategy registry ─────────────────────────────────────────────────────
 
 interface SelectorStrategy {
@@ -65,13 +78,33 @@ async function resolveByRole(page: Page, cmd: LLMCommand, _attempt: number): Pro
   try {
     if (name) {
       const locator = page.getByRole(role as Parameters<typeof page.getByRole>[0], { name, exact: false })
-      if (await isLocatorUsable(locator)) return locator
+      if (await canUseLocatorForCommand(locator, cmd)) return locator
     }
 
     // Try role alone (no name constraint) when no text given
     const locator = page.getByRole(role as Parameters<typeof page.getByRole>[0])
-    if (await isLocatorUsable(locator)) return locator
+    if (await canUseLocatorForCommand(locator, cmd)) return locator
   } catch { /* not found */ }
+  return null
+}
+
+async function resolveByField(page: Page, cmd: LLMCommand, _attempt: number): Promise<Locator | null> {
+  const probes: Locator[] = []
+
+  if (cmd.name) {
+    probes.push(page.locator(`[name="${cssAttrValue(cmd.name)}"]`))
+  }
+
+  const text = (cmd.text ?? '').trim()
+  if (text) {
+    probes.push(page.getByLabel(text, { exact: true }))
+    probes.push(page.getByPlaceholder(text, { exact: true }))
+  }
+
+  for (const locator of probes) {
+    if (await canUseLocatorForCommand(locator, cmd)) return locator
+  }
+
   return null
 }
 
@@ -81,7 +114,7 @@ async function resolveByText(page: Page, cmd: LLMCommand, _attempt: number): Pro
 
   try {
     const locator = page.getByText(text, { exact: false })
-    if (await isLocatorUsable(locator)) return locator
+    if (await canUseLocatorForCommand(locator, cmd)) return locator
   } catch { /* not found */ }
   return null
 }
@@ -101,7 +134,7 @@ async function resolveByTestId(page: Page, cmd: LLMCommand, _attempt: number): P
     for (const value of testIdValues) {
       try {
         const locator = page.locator(`[${attr}="${value}"]`)
-        if (await isLocatorUsable(locator)) return locator
+        if (await canUseLocatorForCommand(locator, cmd)) return locator
       } catch { /* not found */ }
     }
   }
@@ -125,7 +158,7 @@ async function resolveByCSS(page: Page, cmd: LLMCommand, _attempt: number): Prom
   for (const sel of selectors) {
     try {
       const locator = page.locator(sel)
-      if (await isLocatorUsable(locator)) return locator
+      if (await canUseLocatorForCommand(locator, cmd)) return locator
     } catch { /* bad selector */ }
   }
 
@@ -193,6 +226,7 @@ async function resolveByKeywordFallback(
 
 const STRATEGIES: SelectorStrategy[] = [
   { name: 'role', maxRetries: 2, fn: resolveByRole },
+  { name: 'field', maxRetries: 2, fn: resolveByField },
   { name: 'text', maxRetries: 2, fn: resolveByText },
   { name: 'testId', maxRetries: 3, fn: resolveByTestId },
   { name: 'css', maxRetries: 2, fn: resolveByCSS },
@@ -316,7 +350,7 @@ export async function resolveSelectorWithRetry(
   // from the instruction and try Playwright's built-in locators (which pierce
   // Shadow DOM) to find the element.
   if (context?.instruction && context?.snapshot) {
-    const hasEmptySelectors = !command.role && !command.text && !command.testId && !command.selector
+  const hasEmptySelectors = !command.role && !command.text && !command.name && !command.testId && !command.selector
     if (hasEmptySelectors) {
       const keywords = extractKeywords(context.instruction)
       for (const keyword of keywords) {
@@ -338,6 +372,7 @@ export async function resolveSelectorWithRetry(
 function buildSelectorDesc(cmd: LLMCommand, strategy: string, _retry: number): string {
   switch (strategy) {
     case 'role': return `getByRole("${cmd.role ?? ''}", {name:"${cmd.text ?? ''}"})`
+    case 'field': return `name="${cmd.name ?? ''}" or label/placeholder="${cmd.text ?? ''}"`
     case 'text': return `getByText("${cmd.text ?? cmd.value ?? ''}")`
     case 'testId': return `[data-testid="${cmd.testId ?? cmd.text ?? ''}"]`
     case 'css': return cmd.selector ?? `${cmd.role ?? ''}[${cmd.text ?? ''}]`

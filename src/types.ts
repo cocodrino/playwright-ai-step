@@ -10,6 +10,7 @@ export interface LLMCommand {
   value?: string
   role?: string
   text?: string
+  name?: string
   testId?: string
   assertion?: {
     type: 'visible' | 'text' | 'count' | 'attribute'
@@ -79,7 +80,7 @@ export interface LLMConfig {
 
 export interface SelectorConfig {
   preferSemantic: boolean
-  fallbackStrategies: ('role' | 'text' | 'testId' | 'css')[]
+  fallbackStrategies: ('role' | 'field' | 'text' | 'testId' | 'css')[]
   maxRetries: number
 }
 
@@ -135,7 +136,7 @@ export const DEFAULT_LLM_CONFIG: LLMConfig = {
 
 export const DEFAULT_SELECTOR_CONFIG: SelectorConfig = {
   preferSemantic: true,
-  fallbackStrategies: ['role', 'text', 'testId', 'css'],
+  fallbackStrategies: ['role', 'field', 'text', 'testId', 'css'],
   maxRetries: 2,
 }
 
