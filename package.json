@@ -1,6 +1,6 @@
 {
   "name": "playwright-ai-step",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "type": "module",
   "description": "AI-powered Playwright testing",
   "license": "Apache-2.0",

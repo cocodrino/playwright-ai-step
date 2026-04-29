@@ -139,6 +139,23 @@ async function executeQuery(
   }
 }
 
+async function verifyExpectation(page: Page, expect?: AiOptions['expect']): Promise<void> {
+  if (!expect) return
+  const timeout = expect.timeoutMs ?? 5000
+
+  if (expect.url) {
+    await page.waitForURL(expect.url, { timeout })
+  }
+
+  if (expect.visibleSelector) {
+    await page.locator(expect.visibleSelector).first().waitFor({ state: 'visible', timeout })
+  }
+
+  if (expect.visibleText) {
+    await page.getByText(expect.visibleText, { exact: false }).first().waitFor({ state: 'visible', timeout })
+  }
+}
+
 function flattenExtractedData(data: unknown): unknown {
   if (Array.isArray(data)) return data.map(flattenExtractedData)
   if (data !== null && typeof data === 'object') {
@@ -241,57 +258,80 @@ export async function ai(
   const contextConfig = DEFAULT_CONTEXT_CONFIG
 
   const instructions = Array.isArray(instruction) ? instruction : [instruction]
-  const snapshot = await serializePage(options.page)
-
-  // Build vision context if enabled (Phase 4 feature)
-  const visionContext = await buildVisionContext(
-    options.page,
-    snapshot,
-    contextConfig.includeScreenshot,
-  )
 
   for (const inst of instructions) {
     const type = options.type ?? 'action'
-    const command = await callLLM(inst, snapshot, type, config, visionContext, options.schema)
+    const maxAttempts = 2
+    let lastError: Error | null = null
 
-    if (command.action === 'fail') {
-      throw new Error(
-        `ai() failed: ${command.reason ?? command.reasoning ?? 'unknown error'}\n` +
-        `  Instruction: "${inst}"\n  confidence: ${command.confidence}`
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const snapshot = await serializePage(options.page)
+
+      const visionContext = await buildVisionContext(
+        options.page,
+        snapshot,
+        contextConfig.includeScreenshot,
       )
-    }
 
-    // Extract mode: return structured JSON directly
-    if (type === 'extract') {
-      if (command.extractedData === undefined) {
-        throw new Error(`ai() extract: no data returned. LLM said: ${command.reasoning}`)
+      const command = await callLLM(inst, snapshot, type, config, visionContext, options.schema)
+
+      if (command.action === 'fail') {
+        lastError = new Error(
+          `ai() failed: ${command.reason ?? command.reasoning ?? 'unknown error'}\n` +
+          `  Instruction: "${inst}"\n  confidence: ${command.confidence}`
+        )
+        if (attempt < maxAttempts - 1) continue
+        throw lastError
       }
-      const flattened = flattenExtractedData(command.extractedData)
-      const enriched = enrichExtractedUrls(flattened, snapshot, options.schema)
-      return enriched as boolean | string | number
-    }
 
-    const { locator, attempts } = await resolveSelectorWithRetry(
-      options.page,
-      command,
-      false,
-      { instruction: inst, snapshot },
-    )
+      // Extract mode: return structured JSON directly
+      if (type === 'extract') {
+        if (command.extractedData === undefined) {
+          lastError = new Error(`ai() extract: no data returned. LLM said: ${command.reasoning}`)
+          if (attempt < maxAttempts - 1) continue
+          throw lastError
+        }
+        const flattened = flattenExtractedData(command.extractedData)
+        const enriched = enrichExtractedUrls(flattened, snapshot, options.schema)
+        return enriched as boolean | string | number
+      }
 
-    if (!locator) {
-      const errorMsg = buildSelectorError(command, snapshot, attempts)
-      throw new Error(
-        `ai() selector resolution failed after ${attempts.length} attempts.\n` +
-        `${errorMsg}\n  Instruction: "${inst}"`
+      const { locator, attempts } = await resolveSelectorWithRetry(
+        options.page,
+        command,
+        false,
+        { instruction: inst, snapshot },
       )
+
+      if (!locator) {
+        const errorMsg = buildSelectorError(command, snapshot, attempts)
+        lastError = new Error(
+          `ai() selector resolution failed after ${attempts.length} attempts.\n` +
+          `${errorMsg}\n  Instruction: "${inst}"`
+        )
+        if (attempt < maxAttempts - 1) continue
+        throw lastError
+      }
+
+      try {
+        if (type === 'assert' || command.action === 'assert') {
+          return await executeAssert(command, locator)
+        } else if (type === 'query' || command.action === 'query') {
+          return await executeQuery(options.page, command, locator)
+        } else {
+          await executeAction(command, locator, options.page)
+          await verifyExpectation(options.page, options.expect)
+          break
+        }
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err))
+        if (attempt < maxAttempts - 1) continue
+        throw lastError
+      }
     }
 
-    if (type === 'assert' || command.action === 'assert') {
-      return await executeAssert(command, locator)
-    } else if (type === 'query' || command.action === 'query') {
-      return await executeQuery(options.page, command, locator)
-    } else {
-      await executeAction(command, locator, options.page)
+    if (lastError && type !== 'action') {
+      throw lastError
     }
   }
 

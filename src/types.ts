@@ -114,6 +114,20 @@ export interface AiOptions {
   model?: string
   /** JSON schema for type:'extract' — describes the data to extract */
   schema?: Record<string, unknown>
+  /**
+   * Optional post-condition contract.
+   * If provided, ai() validates expected UI state after executing an action.
+   */
+  expect?: {
+    /** text expected to become visible */
+    visibleText?: string
+    /** CSS selector expected to be visible */
+    visibleSelector?: string
+    /** URL expected after action */
+    url?: string | RegExp
+    /** max wait time for expectation checks */
+    timeoutMs?: number
+  }
 }
 
 // ─── Fixture types ─────────────────────────────────────────────────────

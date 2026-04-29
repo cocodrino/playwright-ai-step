@@ -251,9 +251,41 @@ function buildDiagnosticContext(
     `  LLM confidence: ${cmd.confidence}\n` +
     `  Strategy history:\n${strategyHistory}\n` +
     `  Closest DOM element: ${closest ?? 'none found'}\n` +
-    `  Available strategies: role → text → testId → CSS\n` +
+    `  Top candidates:\n${buildTopCandidates(cmd, snapshot)}\n` +
+    `  Available strategies: role → field → text → testId → CSS\n` +
     `  Tip: Add data-testid attributes for stable selectors.`
   )
+}
+
+function buildTopCandidates(cmd: LLMCommand, snapshot: DOMSnapshot): string {
+  const visible = snapshot.elements.filter(el => el.isVisible)
+  const target = (cmd.text ?? cmd.value ?? cmd.name ?? '').toLowerCase().trim()
+
+  const ranked = visible
+    .map(el => {
+      let score = 0
+      const text = (el.textContent ?? '').toLowerCase()
+      const aria = (el.ariaLabel ?? '').toLowerCase()
+      const placeholder = (el.placeholder ?? '').toLowerCase()
+      const nameAttr = (el.attributes?.name ?? '').toLowerCase()
+
+      if (cmd.role && el.role === cmd.role) score += 3
+      if (target && text.includes(target)) score += 4
+      if (target && aria.includes(target)) score += 4
+      if (target && placeholder.includes(target)) score += 3
+      if (target && nameAttr.includes(target)) score += 3
+      if (cmd.testId && el.dataTestId === cmd.testId) score += 5
+
+      return { el, score }
+    })
+    .filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+
+  if (ranked.length === 0) return '  - none'
+  return ranked
+    .map(({ el, score }) => `  - score:${score} ${elementToString(el)}`)
+    .join('\n')
 }
 
 function findClosestElement(cmd: LLMCommand, snapshot: DOMSnapshot): string | null {
